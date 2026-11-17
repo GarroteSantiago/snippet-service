@@ -1,8 +1,10 @@
 package org.snippet.snippet.clients.permission
 
 import org.snippet.snippet.clients.upstream
+import org.snippet.snippet.common.error.UpstreamException
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
+import org.springframework.web.client.HttpClientErrorException
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.body
 import java.util.UUID
@@ -34,11 +36,12 @@ data class SnippetAccess(
 
 /** Permission Service (`contracts/permission-service.openapi.yaml`). */
 interface PermissionClient {
+    /** false if the user already had a permission on the snippet (the service answers 409); it is left as it was. */
     fun grant(
         snippetId: UUID,
         userId: String,
         role: Role,
-    )
+    ): Boolean
 
     fun check(
         snippetId: UUID,
@@ -66,16 +69,20 @@ class RestPermissionClient(
         snippetId: UUID,
         userId: String,
         role: Role,
-    ) {
-        upstream(SERVICE) {
-            client
-                .post()
-                .uri("/permissions")
-                .body(Permission(snippetId, userId, role))
-                .retrieve()
-                .toBodilessEntity()
+    ): Boolean =
+        try {
+            upstream(SERVICE) {
+                client
+                    .post()
+                    .uri("/permissions")
+                    .body(Permission(snippetId, userId, role))
+                    .retrieve()
+                    .toBodilessEntity()
+            }
+            true
+        } catch (e: UpstreamException) {
+            if (e.cause is HttpClientErrorException.Conflict) false else throw e
         }
-    }
 
     override fun check(
         snippetId: UUID,

@@ -1,6 +1,9 @@
 package org.snippet.snippet.support
 
 import org.snippet.snippet.clients.asset.AssetClient
+import org.snippet.snippet.clients.auth0.UserDirectory
+import org.snippet.snippet.clients.auth0.UserSearchResult
+import org.snippet.snippet.clients.auth0.UserSummary
 import org.snippet.snippet.clients.permission.Action
 import org.snippet.snippet.clients.permission.PermissionCheck
 import org.snippet.snippet.clients.permission.PermissionClient
@@ -58,9 +61,12 @@ class FakePermissions : PermissionClient {
         snippetId: UUID,
         userId: String,
         role: Role,
-    ) {
+    ): Boolean {
         if (failGrant) throw UpstreamException("Permission Service", "down")
+        // Like the real one: 409 if the user already has a permission, which stays as it was
+        if ((snippetId to userId) in roles) return false
         roles[snippetId to userId] = role
+        return true
     }
 
     override fun check(
@@ -114,5 +120,30 @@ class FakeAssets : AssetClient {
         key: String,
     ) {
         stored.remove(container to key)
+    }
+}
+
+/** The Auth0 users, by id. Search is a case-insensitive prefix match on the name. */
+class FakeUsers(
+    vararg users: UserSummary,
+) : UserDirectory {
+    val users = users.toMutableList()
+    var fail = false
+
+    override fun search(
+        name: String?,
+        excludedUserId: String,
+        page: Int,
+        pageSize: Int,
+    ): UserSearchResult {
+        if (fail) throw UpstreamException("Auth0 Management API", "down")
+        val matching =
+            users.filter { it.id != excludedUserId && it.name.startsWith(name.orEmpty(), ignoreCase = true) }
+        return UserSearchResult(matching.size.toLong(), matching.drop(page * pageSize).take(pageSize))
+    }
+
+    override fun exists(userId: String): Boolean {
+        if (fail) throw UpstreamException("Auth0 Management API", "down")
+        return users.any { it.id == userId }
     }
 }

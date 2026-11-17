@@ -24,7 +24,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder
 import java.nio.charset.StandardCharsets
 import java.util.UUID
 
-/** `/snippets` of `contracts/snippet-service.openapi.yaml` (CRUD, listing and download). */
+/** `/snippets` of `contracts/snippet-service.openapi.yaml` (CRUD, listing, sharing and download). */
 @RestController
 @RequestMapping("/snippets")
 class SnippetController(
@@ -83,6 +83,13 @@ class SnippetController(
         service.delete(CurrentUser.from(jwt), snippetId)
         return ResponseEntity.noContent().build()
     }
+
+    @PostMapping("/{snippetId}/share")
+    fun share(
+        @AuthenticationPrincipal jwt: Jwt,
+        @PathVariable snippetId: UUID,
+        @Valid @RequestBody request: ShareSnippetRequest,
+    ): SnippetResponse = service.share(CurrentUser.from(jwt), snippetId, request.userId)
 
     @GetMapping("/{snippetId}/download")
     fun download(

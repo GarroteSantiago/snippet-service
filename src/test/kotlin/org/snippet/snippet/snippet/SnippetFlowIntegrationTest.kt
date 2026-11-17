@@ -2,11 +2,14 @@ package org.snippet.snippet.snippet
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.junit.jupiter.api.Test
+import org.snippet.snippet.clients.auth0.UserDirectory
+import org.snippet.snippet.clients.auth0.UserSummary
 import org.snippet.snippet.clients.permission.Role
 import org.snippet.snippet.clients.runner.RunnerClient
 import org.snippet.snippet.support.FakeAssets
 import org.snippet.snippet.support.FakePermissions
 import org.snippet.snippet.support.FakeRunner
+import org.snippet.snippet.support.FakeUsers
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -63,6 +66,10 @@ class SnippetFlowIntegrationTest(
         @Bean
         @Primary
         fun fakeAssets(): FakeAssets = FakeAssets()
+
+        @Bean
+        @Primary
+        fun fakeUsers(): UserDirectory = FakeUsers(UserSummary("auth0|alice", "alice"), UserSummary("auth0|bob", "Bob"))
     }
 
     private val alice = jwt().jwt { it.subject("auth0|alice").claim("nickname", "alice") }
@@ -85,7 +92,20 @@ class SnippetFlowIntegrationTest(
     fun `create, share, list, update, download and delete`() {
         val hello = create("Hello")
         val other = create("other")
-        permissions.roles[hello to "auth0|bob"] = Role.READ
+        mockMvc
+            .post("/snippets/$hello/share") {
+                with(alice)
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"userId":"auth0|bob"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.id") { value(hello.toString()) }
+            }
+        assertEquals(Role.READ, permissions.roles[hello to "auth0|bob"])
+        mockMvc.get("/users") { with(alice) }.andExpect {
+            jsonPath("$.count") { value(1) }
+            jsonPath("$.users[0].id") { value("auth0|bob") }
+        }
 
         mockMvc
             .get("/snippets") {

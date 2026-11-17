@@ -31,6 +31,8 @@ El sistema completo se levanta desde `snippet-searcher-infra` con docker compose
 | `PORT` | Puerto HTTP (default 8080) |
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | Postgres de este servicio |
 | `PERMISSION_SERVICE_URL`, `RUNNER_URL`, `ASSET_SERVICE_URL` | Servicios que orquesta |
+| `AUTH0_DOMAIN` | Dominio del tenant (`<tenant>.auth0.com`, sin `https://`; no un custom domain) para la Management API |
+| `AUTH0_M2M_CLIENT_ID`, `AUTH0_M2M_CLIENT_SECRET` | App machine-to-machine de Auth0 autorizada en la Management API con `read:users` |
 
 ## Qué trae la plantilla
 
@@ -48,6 +50,13 @@ El sistema completo se levanta desde `snippet-searcher-infra` con docker compose
 - **Fallas a mitad de camino.** Crear guarda metadatos, contenido y `OWNER` en ese orden; el permiso es lo que lo hace visible. Si falla un paso se deshacen los anteriores. Actualizar guarda los metadatos y después el contenido; si falla el contenido se restauran los metadatos. Borrar elimina primero los metadatos y después, sin cortar si fallan, el contenido y los permisos (lo que quede huérfano no es accesible).
 - Un servicio que no responde o responde algo inesperado se devuelve como `502`. Los clientes HTTP tienen timeouts de `spring.http.client.*`.
 - La extensión de cada lenguaje se configura en `languages.extensions` (el Runner no la informa).
+
+## Compartir (US-07)
+
+- `GET /users?name=&page=&page_size=` busca en la Management API de Auth0 (search engine v3): usuarios cuyo `name`, `nickname` o `email` empieza con `name` (sin `name`, todos). El que pregunta se excluye en la misma query, así `count` es correcto. Cada usuario sale con `id` = `user_id` y `name` = `name`, si no `nickname`, si no `email`. El texto se escapa antes de armar la query.
+- `POST /snippets/{id}/share` con `{"userId": "..."}` da `READ` en el Permission Service y devuelve el snippet (con contenido). Solo el `OWNER`: con `READ`, `403`; sin acceso, `404`. Compartir con uno mismo o con un usuario que Auth0 no conoce es `400`. Si el usuario ya tenía acceso (el Permission Service responde `409`) no cambia nada y responde `200` igual (idempotente).
+- Token de la Management API: Client Credentials (`POST https://{AUTH0_DOMAIN}/oauth/token`, audience `https://{AUTH0_DOMAIN}/api/v2/`), guardado en memoria hasta un minuto antes de que venza. Un `401` de Auth0 lo descarta. A Auth0 nunca se le manda el token del usuario.
+- Sin `AUTH0_DOMAIN`, `AUTH0_M2M_CLIENT_ID` o `AUTH0_M2M_CLIENT_SECRET` el servicio arranca igual; `/users` y compartir responden `502`. Una falla o un rate limit (`429`) de Auth0 también es `502`.
 
 ## Ramas y CI
 
