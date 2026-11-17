@@ -21,6 +21,11 @@ spring:
       ddl-auto: validate
   flyway:
     enabled: true
+  http:
+    client:
+      # Applies to every RestClient built from Spring's builder (the clients of services.*)
+      connect-timeout: 2s
+      read-timeout: 10s
 
 server:
   port: ${PORT:8080}
@@ -45,3 +50,8 @@ services:
     url: ${RUNNER_URL:http://localhost:8082}
   asset:
     url: ${ASSET_SERVICE_URL:http://localhost:8083}
+
+# Extension of each language the Runner reports (the Runner doesn't say it)
+languages:
+  extensions:
+    printscript: ps
