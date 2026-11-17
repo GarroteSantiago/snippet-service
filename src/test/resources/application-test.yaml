@@ -1,0 +1,8 @@
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # El decoder se crea de forma diferida: con estos valores no se sale a la red
+          issuer-uri: https://snippet-searcher.test/
+          audiences: https://snippet-searcher.test/api

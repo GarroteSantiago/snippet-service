@@ -1,0 +1,7 @@
+.git
+.gradle
+.direnv
+.idea
+.kotlin
+build
+.env

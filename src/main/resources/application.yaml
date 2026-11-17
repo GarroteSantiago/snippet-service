@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: snippet-service
+  threads:
+    virtual:
+      enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Auth0: https://<tenant>.auth0.com/ (con la barra final)
+          issuer-uri: ${AUTH0_ISSUER_URI}
+          audiences: ${AUTH0_AUDIENCE}
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/snippet}
+    username: ${DB_USER:snippet}
+    password: ${DB_PASSWORD:snippet}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# Servicios que orquesta (ver contracts/)
+services:
+  permission:
+    url: ${PERMISSION_SERVICE_URL:http://localhost:8081}
+  runner:
+    url: ${RUNNER_URL:http://localhost:8082}
+  asset:
+    url: ${ASSET_SERVICE_URL:http://localhost:8083}
