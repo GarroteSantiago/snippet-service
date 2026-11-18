@@ -7,6 +7,7 @@ import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoInteractions
 import org.snippet.snippet.clients.permission.RelationFilter
 import org.snippet.snippet.clients.runner.Diagnostic
+import org.snippet.snippet.common.error.BadRequestException
 import org.snippet.snippet.common.error.ForbiddenException
 import org.snippet.snippet.common.error.InvalidCodeException
 import org.snippet.snippet.common.error.NotFoundException
@@ -304,5 +305,57 @@ class SnippetControllerTest(
                 status { isOk() }
                 header { string(HttpHeaders.CONTENT_DISPOSITION, containsString("filename*=UTF-8''canci%C3%B3n.ps")) }
             }
+    }
+
+    @Test
+    fun `shares a snippet and returns it`() {
+        given(service.share(alice, id, "auth0|bob")).willReturn(snippet)
+
+        mockMvc
+            .post("/snippets/$id/share") {
+                with(aliceToken)
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"userId":"auth0|bob"}"""
+            }.andExpect {
+                status { isOk() }
+                jsonPath("$.id") { value(id.toString()) }
+                jsonPath("$.relation") { value("owned") }
+            }
+    }
+
+    @Test
+    fun `share errors come out as problem details`() {
+        given(service.share(alice, id, "auth0|bob")).willThrow(ForbiddenException())
+        given(service.share(alice, id, "auth0|carol")).willThrow(NotFoundException("Snippet $id not found"))
+        given(service.share(alice, id, "auth0|alice")).willThrow(BadRequestException("You can't share a snippet with yourself"))
+        given(service.share(alice, id, "auth0|dave")).willThrow(UpstreamException("Auth0 Management API", "answered 429"))
+
+        mapOf("auth0|bob" to 403, "auth0|carol" to 404, "auth0|alice" to 400, "auth0|dave" to 502).forEach { (userId, status) ->
+            mockMvc
+                .post("/snippets/$id/share") {
+                    with(aliceToken)
+                    contentType = MediaType.APPLICATION_JSON
+                    content = """{"userId":"$userId"}"""
+                }.andExpect {
+                    status { isEqualTo(status) }
+                    content { contentType(MediaType.APPLICATION_PROBLEM_JSON) }
+                }
+        }
+    }
+
+    @Test
+    fun `rejects a share without a user with 400`() {
+        listOf("""{"userId":"  "}""", "{}").forEach { body ->
+            mockMvc
+                .post("/snippets/$id/share") {
+                    with(aliceToken)
+                    contentType = MediaType.APPLICATION_JSON
+                    content = body
+                }.andExpect {
+                    status { isBadRequest() }
+                    content { contentType(MediaType.APPLICATION_PROBLEM_JSON) }
+                }
+        }
+        verifyNoInteractions(service)
     }
 }

@@ -42,6 +42,12 @@ data class UpdateSnippetRequest(
     val content: String? = null,
 )
 
+/** Body of `POST /snippets/{snippetId}/share`: the Auth0 user id (`sub`) to share with. */
+data class ShareSnippetRequest(
+    @field:NotBlank
+    val userId: String,
+)
+
 /** The caller's relation with a snippet, from their role in the Permission Service. */
 enum class Relation(
     @get:JsonValue val value: String,

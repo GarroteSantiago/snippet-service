@@ -11,6 +11,7 @@ import org.snippet.snippet.snippet.CreateSnippetRequest
 import org.snippet.snippet.snippet.SnippetService
 import org.snippet.snippet.snippet.UpdateSnippetRequest
 import org.snippet.snippet.support.FakePermissions
+import org.snippet.snippet.support.FakeUsers
 import org.snippet.snippet.support.ProcessingFixture
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -28,6 +29,7 @@ class SnippetJobsTest {
             fixture.assets,
             LanguageCatalog(fixture.runner, LanguageProperties()),
             fixture.jobs,
+            FakeUsers(),
         )
     private val alice = CurrentUser("auth0|alice", "Alice")
 

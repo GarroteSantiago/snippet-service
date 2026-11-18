@@ -2,11 +2,13 @@ package org.snippet.snippet.snippet
 
 import org.slf4j.LoggerFactory
 import org.snippet.snippet.clients.asset.AssetClient
+import org.snippet.snippet.clients.auth0.UserDirectory
 import org.snippet.snippet.clients.permission.Action
 import org.snippet.snippet.clients.permission.PermissionClient
 import org.snippet.snippet.clients.permission.Role
 import org.snippet.snippet.clients.runner.Diagnostic
 import org.snippet.snippet.clients.runner.RunnerClient
+import org.snippet.snippet.common.error.BadRequestException
 import org.snippet.snippet.common.error.InvalidCodeException
 import org.snippet.snippet.common.error.NotFoundException
 import org.snippet.snippet.common.security.CurrentUser
@@ -33,6 +35,7 @@ class SnippetService(
     private val assets: AssetClient,
     private val languages: LanguageCatalog,
     private val jobs: SnippetJobs,
+    private val users: UserDirectory,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -177,6 +180,27 @@ class SnippetService(
             count = page.totalElements,
             snippets = page.content.map { it.toResponse(roles.getValue(it.id)) },
         )
+    }
+
+    /**
+     * Gives [targetUserId] `READ` on the snippet (US-07). Only the owner can share: a
+     * `READ` user gets 403 and anyone else 404. Sharing with yourself or with a user
+     * Auth0 doesn't know is 400. Sharing again with someone who already has access
+     * changes nothing and answers the same as the first time.
+     */
+    fun share(
+        user: CurrentUser,
+        id: UUID,
+        targetUserId: String,
+    ): SnippetResponse {
+        authorize(user, id, Action.WRITE)
+        val snippet = find(id)
+        if (targetUserId == user.id) throw BadRequestException("You can't share a snippet with yourself")
+        if (!users.exists(targetUserId)) throw BadRequestException("User $targetUserId does not exist")
+        if (!permissions.grant(id, targetUserId, Role.READ)) {
+            log.info("User {} already had access to snippet {}", targetUserId, id)
+        }
+        return snippet.toResponse(Role.OWNER, content(snippet))
     }
 
     /** The original content, or the formatted one if [formatted] (stored by the formatting of stage 6). */

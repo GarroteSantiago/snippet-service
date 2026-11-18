@@ -24,6 +24,8 @@ import org.springframework.test.web.client.response.MockRestResponseCreators.wit
 import org.springframework.web.client.RestClient
 import java.util.UUID
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class PermissionClientTest {
     private val builder = RestClient.builder()
@@ -39,14 +41,21 @@ class PermissionClientTest {
             .andExpect(content().json("""{"snippetId":"$snippetId","userId":"auth0|alice","role":"OWNER"}""", JsonCompareMode.STRICT))
             .andRespond(withStatus(HttpStatus.CREATED))
 
-        client.grant(snippetId, "auth0|alice", Role.OWNER)
+        assertTrue(client.grant(snippetId, "auth0|alice", Role.OWNER))
 
         server.verify()
     }
 
     @Test
-    fun `a conflict on grant is an upstream error`() {
+    fun `a conflict on grant means the user already had a permission`() {
         server.expect(requestTo("http://permissions/permissions")).andRespond(withStatus(HttpStatus.CONFLICT))
+
+        assertFalse(client.grant(snippetId, "auth0|bob", Role.READ))
+    }
+
+    @Test
+    fun `any other error on grant is an upstream error`() {
+        server.expect(requestTo("http://permissions/permissions")).andRespond(withStatus(HttpStatus.BAD_REQUEST))
 
         assertThrows<UpstreamException> { client.grant(snippetId, "auth0|alice", Role.OWNER) }
     }

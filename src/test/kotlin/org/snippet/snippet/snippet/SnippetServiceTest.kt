@@ -2,6 +2,7 @@ package org.snippet.snippet.snippet
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.snippet.snippet.clients.auth0.UserSummary
 import org.snippet.snippet.clients.permission.RelationFilter
 import org.snippet.snippet.clients.permission.Role
 import org.snippet.snippet.common.error.BadRequestException
@@ -16,6 +17,7 @@ import org.snippet.snippet.snippet.SnippetService.Companion.CONTENT
 import org.snippet.snippet.snippet.SnippetService.Companion.FORMATTED
 import org.snippet.snippet.support.FakePermissions
 import org.snippet.snippet.support.FakeRunner
+import org.snippet.snippet.support.FakeUsers
 import org.snippet.snippet.support.ProcessingFixture
 import org.springframework.data.domain.Sort
 import java.util.UUID
@@ -29,8 +31,9 @@ class SnippetServiceTest {
     private val permissions = FakePermissions()
     private val runner = processing.runner
     private val assets = processing.assets
+    private val users = FakeUsers(UserSummary("auth0|alice", "Alice"), UserSummary("auth0|bob", "Bob"), UserSummary("auth0|carol", "Carol"))
     private val service =
-        SnippetService(repository, permissions, runner, assets, LanguageCatalog(runner, LanguageProperties()), processing.jobs)
+        SnippetService(repository, permissions, runner, assets, LanguageCatalog(runner, LanguageProperties()), processing.jobs, users)
 
     private val alice = CurrentUser("auth0|alice", "Alice")
     private val bob = CurrentUser("auth0|bob", "Bob")
@@ -299,5 +302,62 @@ class SnippetServiceTest {
         assets.stored.clear()
 
         assertThrows<UpstreamException> { service.get(alice, created.id) }
+    }
+
+    @Test
+    fun `share gives read to the user and returns the snippet with its content`() {
+        val created = create()
+
+        val shared = service.share(alice, created.id, bob.id)
+
+        assertEquals(Role.READ, permissions.roles[created.id to bob.id])
+        assertEquals(created.id, shared.id)
+        assertEquals(Relation.OWNED, shared.relation)
+        assertEquals("println(\"hi\");", shared.content)
+        assertEquals(Relation.SHARED, service.get(bob, created.id).relation)
+    }
+
+    @Test
+    fun `sharing again with the same user is a no-op that still succeeds`() {
+        val created = create()
+        service.share(alice, created.id, bob.id)
+
+        val again = service.share(alice, created.id, bob.id)
+
+        assertEquals(created.id, again.id)
+        assertEquals(Role.READ, permissions.roles[created.id to bob.id])
+        assertEquals(2, permissions.roles.size)
+    }
+
+    @Test
+    fun `only the owner can share`() {
+        val created = create()
+        shareWithBob(created.id)
+
+        assertThrows<ForbiddenException> { service.share(bob, created.id, "auth0|carol") }
+        assertThrows<NotFoundException> { service.share(CurrentUser("auth0|carol", "Carol"), created.id, bob.id) }
+        assertThrows<NotFoundException> { service.share(alice, UUID.randomUUID(), bob.id) }
+        assertNull(permissions.roles[created.id to "auth0|carol"])
+    }
+
+    @Test
+    fun `sharing with yourself or with an unknown user is a bad request`() {
+        val created = create()
+
+        assertThrows<BadRequestException> { service.share(alice, created.id, alice.id) }
+        assertThrows<BadRequestException> { service.share(alice, created.id, "auth0|nobody") }
+        assertEquals(1, permissions.roles.size)
+    }
+
+    @Test
+    fun `share is an upstream error when auth0 or the permission service fail`() {
+        val created = create()
+
+        users.fail = true
+        assertThrows<UpstreamException> { service.share(alice, created.id, bob.id) }
+        users.fail = false
+        permissions.failGrant = true
+        assertThrows<UpstreamException> { service.share(alice, created.id, bob.id) }
+        assertNull(permissions.roles[created.id to bob.id])
     }
 }

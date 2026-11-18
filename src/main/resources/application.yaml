@@ -76,3 +76,12 @@ streams:
 # US-18: cada cuánto se pregunta el parserVersion al Runner (también al arrancar)
 parser-version:
   check-interval: 5m
+
+# Auth0 Management API, to search users and check they exist when sharing (US-07).
+# Machine-to-machine app with the `read:users` permission. Without these values the
+# service starts anyway; only `GET /users` and sharing fail (502).
+auth0:
+  management:
+    domain: ${AUTH0_DOMAIN:}
+    client-id: ${AUTH0_M2M_CLIENT_ID:}
+    client-secret: ${AUTH0_M2M_CLIENT_SECRET:}
