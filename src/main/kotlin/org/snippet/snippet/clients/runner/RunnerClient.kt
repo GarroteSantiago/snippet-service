@@ -1,6 +1,7 @@
 package org.snippet.snippet.clients.runner
 
 import com.fasterxml.jackson.annotation.JsonInclude
+import com.fasterxml.jackson.annotation.JsonValue
 import org.snippet.snippet.clients.upstream
 import org.snippet.snippet.common.error.InvalidCodeException
 import org.springframework.beans.factory.annotation.Value
@@ -40,6 +41,26 @@ data class RuleConfig(
     val description: String? = null,
 )
 
+enum class TestStatus(
+    @get:JsonValue val value: String,
+) {
+    SUCCESS("success"),
+    FAIL("fail"),
+    ;
+
+    companion object {
+        fun fromValue(value: String): TestStatus =
+            entries.find { it.value == value } ?: throw IllegalArgumentException("Unknown test status '$value'")
+    }
+}
+
+/** What `POST /test` answers: the outputs it got and, if the code failed to run, why. */
+data class TestResult(
+    val status: TestStatus,
+    val outputs: List<String>,
+    val errors: List<Diagnostic> = emptyList(),
+)
+
 enum class RuleType(
     val path: String,
 ) {
@@ -65,6 +86,14 @@ interface RunnerClient {
         version: String,
         rules: List<RuleConfig>,
     ): String
+
+    /** Runs the code consuming [inputs] in order and compares each `println` with [expectedOutputs]. */
+    fun test(
+        content: String,
+        version: String,
+        inputs: List<String>,
+        expectedOutputs: List<String>,
+    ): TestResult
 }
 
 @Component
@@ -124,6 +153,21 @@ class RestRunnerClient(
             }
         }.content
 
+    override fun test(
+        content: String,
+        version: String,
+        inputs: List<String>,
+        expectedOutputs: List<String>,
+    ): TestResult =
+        upstream(SERVICE) {
+            client
+                .post()
+                .uri("/test")
+                .body(TestRequest(content, version, inputs, expectedOutputs))
+                .retrieve()
+                .body<RunnerTestResult>()
+        }.let { TestResult(it.status, it.outputs, it.errors.orEmpty()) }
+
     private fun RestClientResponseException.diagnostics(): List<Diagnostic> =
         runCatching { getResponseBodyAs(RunnerProblem::class.java)?.diagnostics }.getOrNull().orEmpty()
 
@@ -140,6 +184,20 @@ class RestRunnerClient(
 
     private data class FormatResult(
         val content: String,
+    )
+
+    private data class TestRequest(
+        val content: String,
+        val version: String,
+        val inputs: List<String>,
+        val expectedOutputs: List<String>,
+    )
+
+    // `errors` is optional in the contract
+    private data class RunnerTestResult(
+        val status: TestStatus,
+        val outputs: List<String>,
+        val errors: List<Diagnostic>? = null,
     )
 
     private data class RunnerProblem(

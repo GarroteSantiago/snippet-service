@@ -11,6 +11,8 @@ import org.snippet.snippet.clients.runner.Diagnostic
 import org.snippet.snippet.clients.runner.RuleConfig
 import org.snippet.snippet.clients.runner.RuleType
 import org.snippet.snippet.clients.runner.RunnerClient
+import org.snippet.snippet.clients.runner.TestResult
+import org.snippet.snippet.clients.runner.TestStatus
 import org.snippet.snippet.clients.runner.ValidationResult
 import org.snippet.snippet.clients.runner.Versions
 import org.snippet.snippet.common.error.InvalidCodeException
@@ -24,6 +26,7 @@ class FakeRunner : RunnerClient {
     var versions = Versions("printscript", listOf("1.0", "1.1"), "1.1")
     val formatRules = listOf(RuleConfig("indentation", true, 4, "Spaces per level"))
     var lastFormatRules: List<RuleConfig>? = null
+    var lastTest: TestCall? = null
 
     override fun versions() = versions
 
@@ -44,11 +47,30 @@ class FakeRunner : RunnerClient {
         return content.trim() + "\n"
     }
 
+    // The "program" prints its inputs back; code containing [INVALID] fails to run
+    override fun test(
+        content: String,
+        version: String,
+        inputs: List<String>,
+        expectedOutputs: List<String>,
+    ): TestResult {
+        lastTest = TestCall(content, version, inputs, expectedOutputs)
+        if (INVALID in content) return TestResult(TestStatus.FAIL, emptyList(), listOf(DIAGNOSTIC))
+        return TestResult(if (inputs == expectedOutputs) TestStatus.SUCCESS else TestStatus.FAIL, inputs)
+    }
+
     companion object {
         const val INVALID = "!!"
         val DIAGNOSTIC = Diagnostic(null, "Unexpected '!'", 1, 3)
     }
 }
+
+data class TestCall(
+    val content: String,
+    val version: String,
+    val inputs: List<String>,
+    val expectedOutputs: List<String>,
+)
 
 class FakePermissions : PermissionClient {
     val roles = mutableMapOf<Pair<UUID, String>, Role>()

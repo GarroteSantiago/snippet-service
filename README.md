@@ -49,6 +49,13 @@ El sistema completo se levanta desde `snippet-searcher-infra` con docker compose
 - Un servicio que no responde o responde algo inesperado se devuelve como `502`. Los clientes HTTP tienen timeouts de `spring.http.client.*`.
 - La extensión de cada lenguaje se configura en `languages.extensions` (el Runner no la informa).
 
+## Tests de snippets
+
+- Tabla `test_case` (`V4__create_test_case.sql`): nombre, `inputs` y `expected_outputs` (jsonb), `last_result` (`success`/`fail`, null si nunca corrió) y `last_run_at`. La FK a `snippet` es `ON DELETE CASCADE`: borrar el snippet borra sus tests.
+- Mismas reglas de acceso que el snippet (`snippet/SnippetAccess.kt`): listar y correr piden `READ`; crear, editar y borrar, `OWNER`. Un test de otro snippet es `404`.
+- Correr un test lee el contenido del Asset Service y llama a `POST /test` del Runner con la versión del snippet. Correr uno guardado guarda `last_result`; el ad hoc (`/tests/run`) no guarda nada. Editar un test borra su último resultado.
+- Para US-16: `TestCaseService.testsOfSnippet` (los tests a publicar) y `TestCaseService.recordResult` (guarda el resultado por id de test, sin chequear permisos).
+
 ## Ramas y CI
 
 - `dev` y `prod`. Se trabaja en ramas cortas con pull request a `dev`; `prod` recibe merges desde `dev`.
