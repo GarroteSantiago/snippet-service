@@ -220,15 +220,33 @@ class SnippetService(
         return SnippetFile("${snippet.name}.${snippet.extension}", content)
     }
 
+    /**
+     * What the Runner needs to run the snippet interactively (US-10), if [user] can read it. Called
+     * from a WebSocket thread, which has no request: the calls carry [token] explicitly.
+     */
+    fun runnable(
+        user: CurrentUser,
+        id: UUID,
+        token: String,
+    ): RunnableSnippet {
+        authorize(user, id, Action.READ, token)
+        val snippet = find(id)
+        return RunnableSnippet(content(snippet, token), snippet.version)
+    }
+
     private fun authorize(
         user: CurrentUser,
         id: UUID,
         action: Action,
-    ): Role = permissions.authorize(user, id, action)
+        token: String? = null,
+    ): Role = permissions.authorize(user, id, action, token)
 
     private fun find(id: UUID): Snippet = repository.findOrNotFound(id)
 
-    private fun content(snippet: Snippet): String = assets.contentOf(snippet)
+    private fun content(
+        snippet: Snippet,
+        token: String? = null,
+    ): String = assets.contentOf(snippet, token)
 
     private fun requireValid(
         content: String,

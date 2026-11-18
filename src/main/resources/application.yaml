@@ -85,3 +85,10 @@ auth0:
     domain: ${AUTH0_DOMAIN:}
     client-id: ${AUTH0_M2M_CLIENT_ID:}
     client-secret: ${AUTH0_M2M_CLIENT_SECRET:}
+
+# Ejecución interactiva por WebSocket (/ws/snippets/{id}/run, contracts/websocket.md)
+snippet-run:
+  # Tiempo para mandar el start con el token antes de cerrar con 4401
+  start-timeout: 5s
+  # Orígenes que pueden abrir el socket (el token va en el primer mensaje, no en cookies)
+  allowed-origins: ${WS_ALLOWED_ORIGINS:*}

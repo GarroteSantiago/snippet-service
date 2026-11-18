@@ -25,7 +25,7 @@ class CorrelationIdFilter : OncePerRequestFilter() {
         val correlationId =
             request
                 .getHeader(HEADER)
-                ?.takeIf { SAFE_ID.matches(it) }
+                ?.takeIf { isSafe(it) }
                 ?: UUID.randomUUID().toString()
         MDC.put(MDC_KEY, correlationId)
         response.setHeader(HEADER, correlationId)
@@ -42,5 +42,8 @@ class CorrelationIdFilter : OncePerRequestFilter() {
 
         // Anything else is replaced, so a client can't inject text into the logs
         private val SAFE_ID = Regex("^[A-Za-z0-9-]{1,64}$")
+
+        /** Whether [id] can go to the logs as is. */
+        fun isSafe(id: String) = SAFE_ID.matches(id)
     }
 }

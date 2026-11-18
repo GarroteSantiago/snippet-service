@@ -1,6 +1,8 @@
 package org.snippet.snippet.clients
 
 import org.snippet.snippet.common.error.UpstreamException
+import org.snippet.snippet.common.http.OutboundHeadersInterceptor
+import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
 import org.springframework.web.client.RestClientResponseException
 
@@ -19,3 +21,10 @@ internal fun <T : Any> upstream(
     } catch (e: RestClientException) {
         throw UpstreamException(service, e.message ?: "call failed", e)
     }
+
+/**
+ * Sends [token] as the caller's bearer token. With null, [OutboundHeadersInterceptor] puts the
+ * token of the current request, as for every other call.
+ */
+internal fun RestClient.RequestHeadersSpec<*>.withToken(token: String?): RestClient.RequestHeadersSpec<*> =
+    if (token == null) this else headers { it.setBearerAuth(token) }

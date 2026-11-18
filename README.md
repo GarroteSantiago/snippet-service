@@ -37,6 +37,8 @@ El sistema completo se levanta desde `snippet-searcher-infra` con docker compose
 | `AUTH0_DOMAIN` | Dominio del tenant (`<tenant>.auth0.com`, sin `https://`; no un custom domain) para la Management API |
 | `AUTH0_M2M_CLIENT_ID`, `AUTH0_M2M_CLIENT_SECRET` | App machine-to-machine de Auth0 autorizada en la Management API con `read:users` |
 
+| `WS_ALLOWED_ORIGINS` | Orígenes que pueden abrir el WebSocket de ejecución (default `*`) |
+
 ## Qué trae la plantilla
 
 - `common/security`: todo exige un JWT válido de Auth0 salvo `/health`.
@@ -88,6 +90,15 @@ Según `contracts/redis-streams.md`. `processing/SnippetJobs` publica en `snippe
 - `POST /snippets/{id}/share` con `{"userId": "..."}` da `READ` en el Permission Service y devuelve el snippet (con contenido). Solo el `OWNER`: con `READ`, `403`; sin acceso, `404`. Compartir con uno mismo o con un usuario que Auth0 no conoce es `400`. Si el usuario ya tenía acceso (el Permission Service responde `409`) no cambia nada y responde `200` igual (idempotente).
 - Token de la Management API: Client Credentials (`POST https://{AUTH0_DOMAIN}/oauth/token`, audience `https://{AUTH0_DOMAIN}/api/v2/`), guardado en memoria hasta un minuto antes de que venza. Un `401` de Auth0 lo descarta. A Auth0 nunca se le manda el token del usuario.
 - Sin `AUTH0_DOMAIN`, `AUTH0_M2M_CLIENT_ID` o `AUTH0_M2M_CLIENT_SECRET` el servicio arranca igual; `/users` y compartir responden `502`. Una falla o un rate limit (`429`) de Auth0 también es `502`.
+
+## Ejecución interactiva (`/ws/snippets/{id}/run`)
+
+WebSocket plano según `contracts/websocket.md` (público como `/api/ws/...` detrás de NGINX); `run/SnippetRunHandler`.
+
+- El handshake es público (`SecurityConfig`): el navegador no puede mandar headers, así que el primer mensaje es `start` con el JWT, que se valida con el mismo `JwtDecoder` de la API. Sin `start` válido en `snippet-run.start-timeout` (5 s) cierra con `4401`.
+- Sin ningún permiso o snippet inexistente: `4404` (como el 404 HTTP); con acceso pero sin `READ`: `4403`; otro `start` en la misma sesión: `4409`.
+- Los hilos del WebSocket no tienen `SecurityContext`: el chequeo de permiso y la lectura del contenido llevan el token del usuario explícito (`PermissionClient.check` y `AssetClient.get` aceptan `token`; sin él, el interceptor usa el del request HTTP como siempre).
+- Abre `services.runner.url` (http→ws) `/ws/run` con `Authorization: Bearer <token del usuario>` y `X-Correlation-Id`, le manda el `start` con `content`, `version` y `correlationId`, y después reenvía los mensajes sin tocarlos en los dos sentidos. Si se cierra un lado se cierra el otro; si falla antes de empezar (Runner o servicios caídos) el cliente recibe `error` y `done error`.
 
 ## Ramas y CI
 
