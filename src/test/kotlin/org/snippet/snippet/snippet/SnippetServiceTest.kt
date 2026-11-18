@@ -300,4 +300,22 @@ class SnippetServiceTest {
 
         assertThrows<UpstreamException> { service.get(alice, created.id) }
     }
+
+    @Test
+    fun `runnable gives the content and version to a reader, passing the token on`() {
+        val created = create()
+        shareWithBob(created.id)
+
+        assertEquals(RunnableSnippet("println(\"hi\");", "1.1"), service.runnable(bob, created.id, "bob-token"))
+        assertEquals("bob-token", permissions.lastCheckToken)
+        assertEquals("bob-token", assets.lastGetToken)
+    }
+
+    @Test
+    fun `runnable is not found without access or for a missing snippet`() {
+        val created = create()
+
+        assertThrows<NotFoundException> { service.runnable(bob, created.id, "bob-token") }
+        assertThrows<NotFoundException> { service.runnable(alice, UUID.randomUUID(), "alice-token") }
+    }
 }

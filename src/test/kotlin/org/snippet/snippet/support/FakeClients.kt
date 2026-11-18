@@ -54,6 +54,9 @@ class FakePermissions : PermissionClient {
     val roles = mutableMapOf<Pair<UUID, String>, Role>()
     var failGrant = false
 
+    // The token the last check was given explicitly
+    var lastCheckToken: String? = null
+
     override fun grant(
         snippetId: UUID,
         userId: String,
@@ -67,7 +70,9 @@ class FakePermissions : PermissionClient {
         snippetId: UUID,
         userId: String,
         action: Action,
+        token: String?,
     ): PermissionCheck {
+        lastCheckToken = token
         val role = roles[snippetId to userId]
         val allowed = role == Role.OWNER || (role == Role.READ && action == Action.READ)
         return PermissionCheck(allowed, role)
@@ -95,6 +100,9 @@ class FakeAssets : AssetClient {
     val stored = mutableMapOf<Pair<String, String>, String>()
     var failPut = false
 
+    // The token the last get was given explicitly
+    var lastGetToken: String? = null
+
     override fun put(
         container: String,
         key: String,
@@ -107,7 +115,11 @@ class FakeAssets : AssetClient {
     override fun get(
         container: String,
         key: String,
-    ) = stored[container to key]
+        token: String?,
+    ): String? {
+        lastGetToken = token
+        return stored[container to key]
+    }
 
     override fun delete(
         container: String,

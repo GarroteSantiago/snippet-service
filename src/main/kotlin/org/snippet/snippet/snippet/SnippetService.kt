@@ -192,12 +192,27 @@ class SnippetService(
         return SnippetFile("${snippet.name}.${snippet.extension}", content)
     }
 
+    /**
+     * What the Runner needs to run the snippet interactively (US-10), if [user] can read it. Called
+     * from a WebSocket thread, which has no request: the calls carry [token] explicitly.
+     */
+    fun runnable(
+        user: CurrentUser,
+        id: UUID,
+        token: String,
+    ): RunnableSnippet {
+        authorize(user, id, Action.READ, token)
+        val snippet = find(id)
+        return RunnableSnippet(content(snippet, token), snippet.version)
+    }
+
     private fun authorize(
         user: CurrentUser,
         id: UUID,
         action: Action,
+        token: String? = null,
     ): Role {
-        val check = permissions.check(id, user.id, action)
+        val check = permissions.check(id, user.id, action, token)
         return when {
             check.allowed -> check.role ?: if (action == Action.WRITE) Role.OWNER else Role.READ
             check.role == null -> throw notFound(id)
@@ -209,8 +224,11 @@ class SnippetService(
 
     private fun notFound(id: UUID) = NotFoundException("Snippet $id not found")
 
-    private fun content(snippet: Snippet): String =
-        assets.get(CONTENT, snippet.key)
+    private fun content(
+        snippet: Snippet,
+        token: String? = null,
+    ): String =
+        assets.get(CONTENT, snippet.key, token)
             ?: throw UpstreamException(RestAssetClient.SERVICE, "content of snippet ${snippet.id} is missing")
 
     private fun requireValid(

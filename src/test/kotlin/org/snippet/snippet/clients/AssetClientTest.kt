@@ -4,11 +4,13 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.snippet.snippet.clients.asset.RestAssetClient
 import org.snippet.snippet.common.error.UpstreamException
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.web.client.MockRestServiceServer
 import org.springframework.test.web.client.match.MockRestRequestMatchers.content
+import org.springframework.test.web.client.match.MockRestRequestMatchers.header
 import org.springframework.test.web.client.match.MockRestRequestMatchers.method
 import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
 import org.springframework.test.web.client.response.MockRestResponseCreators.withNoContent
@@ -54,6 +56,16 @@ class AssetClientTest {
             .andRespond(withSuccess("println(\"ñ\");".toByteArray(Charsets.UTF_8), MediaType.APPLICATION_OCTET_STREAM))
 
         assertEquals("println(\"ñ\");", client.get("snippets", "abc"))
+    }
+
+    @Test
+    fun `gets with the token it is given`() {
+        server
+            .expect(requestTo("http://assets/v1/asset/snippets/abc"))
+            .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer user-token"))
+            .andRespond(withSuccess("x", MediaType.APPLICATION_OCTET_STREAM))
+
+        assertEquals("x", client.get("snippets", "abc", token = "user-token"))
     }
 
     @Test

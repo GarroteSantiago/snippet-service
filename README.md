@@ -31,6 +31,7 @@ El sistema completo se levanta desde `snippet-searcher-infra` con docker compose
 | `PORT` | Puerto HTTP (default 8080) |
 | `DB_URL`, `DB_USER`, `DB_PASSWORD` | Postgres de este servicio |
 | `PERMISSION_SERVICE_URL`, `RUNNER_URL`, `ASSET_SERVICE_URL` | Servicios que orquesta |
+| `WS_ALLOWED_ORIGINS` | Orígenes que pueden abrir el WebSocket de ejecución (default `*`) |
 
 ## Qué trae la plantilla
 
@@ -48,6 +49,15 @@ El sistema completo se levanta desde `snippet-searcher-infra` con docker compose
 - **Fallas a mitad de camino.** Crear guarda metadatos, contenido y `OWNER` en ese orden; el permiso es lo que lo hace visible. Si falla un paso se deshacen los anteriores. Actualizar guarda los metadatos y después el contenido; si falla el contenido se restauran los metadatos. Borrar elimina primero los metadatos y después, sin cortar si fallan, el contenido y los permisos (lo que quede huérfano no es accesible).
 - Un servicio que no responde o responde algo inesperado se devuelve como `502`. Los clientes HTTP tienen timeouts de `spring.http.client.*`.
 - La extensión de cada lenguaje se configura en `languages.extensions` (el Runner no la informa).
+
+## Ejecución interactiva (`/ws/snippets/{id}/run`)
+
+WebSocket plano según `contracts/websocket.md` (público como `/api/ws/...` detrás de NGINX); `run/SnippetRunHandler`.
+
+- El handshake es público (`SecurityConfig`): el navegador no puede mandar headers, así que el primer mensaje es `start` con el JWT, que se valida con el mismo `JwtDecoder` de la API. Sin `start` válido en `snippet-run.start-timeout` (5 s) cierra con `4401`.
+- Sin ningún permiso o snippet inexistente: `4404` (como el 404 HTTP); con acceso pero sin `READ`: `4403`; otro `start` en la misma sesión: `4409`.
+- Los hilos del WebSocket no tienen `SecurityContext`: el chequeo de permiso y la lectura del contenido llevan el token del usuario explícito (`PermissionClient.check` y `AssetClient.get` aceptan `token`; sin él, el interceptor usa el del request HTTP como siempre).
+- Abre `services.runner.url` (http→ws) `/ws/run` con `Authorization: Bearer <token del usuario>` y `X-Correlation-Id`, le manda el `start` con `content`, `version` y `correlationId`, y después reenvía los mensajes sin tocarlos en los dos sentidos. Si se cierra un lado se cierra el otro; si falla antes de empezar (Runner o servicios caídos) el cliente recibe `error` y `done error`.
 
 ## Ramas y CI
 

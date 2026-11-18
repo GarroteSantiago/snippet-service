@@ -9,12 +9,14 @@ import org.snippet.snippet.clients.permission.RestPermissionClient
 import org.snippet.snippet.clients.permission.Role
 import org.snippet.snippet.clients.permission.SnippetAccess
 import org.snippet.snippet.common.error.UpstreamException
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.json.JsonCompareMode
 import org.springframework.test.web.client.MockRestServiceServer
 import org.springframework.test.web.client.match.MockRestRequestMatchers.content
+import org.springframework.test.web.client.match.MockRestRequestMatchers.header
 import org.springframework.test.web.client.match.MockRestRequestMatchers.method
 import org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam
 import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
@@ -61,6 +63,15 @@ class PermissionClientTest {
             .andRespond(withSuccess("""{"allowed":false,"role":"READ"}""", MediaType.APPLICATION_JSON))
 
         assertEquals(PermissionCheck(false, Role.READ), client.check(snippetId, "auth0|alice", Action.WRITE))
+    }
+
+    @Test
+    fun `checks with the token it is given`() {
+        server
+            .expect(header(HttpHeaders.AUTHORIZATION, "Bearer user-token"))
+            .andRespond(withSuccess("""{"allowed":true,"role":"READ"}""", MediaType.APPLICATION_JSON))
+
+        assertEquals(PermissionCheck(true, Role.READ), client.check(snippetId, "auth0|alice", Action.READ, token = "user-token"))
     }
 
     @Test

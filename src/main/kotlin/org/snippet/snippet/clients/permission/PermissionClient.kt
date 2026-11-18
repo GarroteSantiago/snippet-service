@@ -1,6 +1,7 @@
 package org.snippet.snippet.clients.permission
 
 import org.snippet.snippet.clients.upstream
+import org.snippet.snippet.clients.withToken
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
@@ -40,10 +41,15 @@ interface PermissionClient {
         role: Role,
     )
 
+    /**
+     * [token] is the user's token for the call; null takes the one of the current HTTP request.
+     * WebSocket threads have no request (nor SecurityContext), so they pass it.
+     */
     fun check(
         snippetId: UUID,
         userId: String,
         action: Action,
+        token: String? = null,
     ): PermissionCheck
 
     fun accessibleSnippets(
@@ -81,11 +87,13 @@ class RestPermissionClient(
         snippetId: UUID,
         userId: String,
         action: Action,
+        token: String?,
     ): PermissionCheck =
         upstream(SERVICE) {
             client
                 .get()
                 .uri("/permissions/check?snippetId={snippetId}&userId={userId}&action={action}", snippetId, userId, action)
+                .withToken(token)
                 .retrieve()
                 .body<PermissionCheck>()
         }

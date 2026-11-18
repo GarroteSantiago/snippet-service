@@ -107,3 +107,9 @@ data class SnippetFile(
     val filename: String,
     val content: String,
 )
+
+/** The code and version the Runner gets in the `start` of an interactive run. */
+data class RunnableSnippet(
+    val content: String,
+    val version: String,
+)

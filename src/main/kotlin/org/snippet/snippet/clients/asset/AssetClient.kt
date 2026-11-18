@@ -1,6 +1,7 @@
 package org.snippet.snippet.clients.asset
 
 import org.snippet.snippet.clients.upstream
+import org.snippet.snippet.clients.withToken
 import org.snippet.snippet.common.error.UpstreamException
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.http.MediaType
@@ -21,10 +22,14 @@ interface AssetClient {
         content: String,
     )
 
-    /** null if there is no such asset. */
+    /**
+     * null if there is no such asset. [token] is the user's token for the call; null takes the one
+     * of the current HTTP request (WebSocket threads have none, so they pass it).
+     */
     fun get(
         container: String,
         key: String,
+        token: String? = null,
     ): String?
 
     /** Idempotent: a missing asset is not an error. */
@@ -61,6 +66,7 @@ class RestAssetClient(
     override fun get(
         container: String,
         key: String,
+        token: String?,
     ): String? =
         try {
             // An empty asset comes back without a body
@@ -68,6 +74,7 @@ class RestAssetClient(
                 client
                     .get()
                     .uri(PATH, container, key)
+                    .withToken(token)
                     .accept(MediaType.ALL)
                     .retrieve()
                     .body<ByteArray>() ?: ByteArray(0)
