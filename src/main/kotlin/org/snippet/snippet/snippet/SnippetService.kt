@@ -137,8 +137,8 @@ class SnippetService(
             // The formatted version is stale until the FORMAT result replaces it
             jobs.lint(snippet, content)
             jobs.format(snippet, content)
-            // TODO(etapa 7): publicar un TEST por cada test del snippet (US-16), registrando el jobId de cada uno
-            // Un TEST por cada TestCaseService.testsOfSnippet(id); el consumidor de resultados llama a TestCaseService.recordResult
+            // US-16: the tests run again in the background
+            jobs.tests(snippet, content)
         }
         return snippet.toResponse(role, content)
     }

@@ -14,6 +14,7 @@ import org.snippet.snippet.snippet.Compliance
 import org.snippet.snippet.snippet.Snippet
 import org.snippet.snippet.snippet.SnippetRepository
 import org.snippet.snippet.snippet.SnippetService
+import org.snippet.snippet.testcase.TestCaseRepository
 import org.springframework.stereotype.Service
 import java.util.UUID
 
@@ -35,6 +36,7 @@ class SnippetJobs(
     private val rules: RuleStore,
     private val repository: SnippetRepository,
     private val assets: AssetClient,
+    private val testCases: TestCaseRepository,
     private val json: ObjectMapper,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -81,6 +83,29 @@ class SnippetJobs(
         }
     }
 
+    /**
+     * US-16: a TEST for each test of the snippet. Each job id is stored on its test before
+     * publishing, so only the newest run of a test can set its `lastResult`. A test that
+     * can't be published keeps its previous result; that is only logged.
+     */
+    fun tests(
+        snippet: Snippet,
+        content: String,
+    ) {
+        testCases.findBySnippetIdOrderByCreatedAtAscIdAsc(snippet.id).forEach { test ->
+            try {
+                val jobId = UUID.randomUUID()
+                testCases.updateLastJob(test.id, jobId)
+                add(
+                    JobType.TEST,
+                    TestJobMessage(jobId, snippet.id, test.id, snippet.version, content, test.inputs, test.expectedOutputs),
+                )
+            } catch (e: Exception) {
+                log.error("Could not publish the TEST {} of snippet {}", test.id, snippet.id, e)
+            }
+        }
+    }
+
     /** After `PUT /rules/lint`: every snippet of the owner goes to `pending` and gets a LINT. */
     fun lintAllOf(
         ownerId: String,
@@ -122,6 +147,13 @@ class SnippetJobs(
         val jobId = UUID.randomUUID()
         val payload = JobMessage(jobId, snippet.id, snippet.version, content, rules?.map { it.copy(description = null) })
         tracker.record(snippet.id, type, jobId)
+        add(type, payload)
+    }
+
+    private fun add(
+        type: JobType,
+        payload: Any,
+    ) {
         streams.add(
             Streams.JOBS,
             mapOf(

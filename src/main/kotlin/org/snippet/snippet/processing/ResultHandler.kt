@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory
 import org.slf4j.MDC
 import org.snippet.snippet.clients.asset.AssetClient
 import org.snippet.snippet.clients.runner.Diagnostic
+import org.snippet.snippet.clients.runner.TestStatus
 import org.snippet.snippet.common.http.BackgroundCalls
 import org.snippet.snippet.common.logging.CorrelationIdFilter
 import org.snippet.snippet.common.streams.StreamEntry
@@ -16,7 +17,10 @@ import org.snippet.snippet.snippet.Snippet
 import org.snippet.snippet.snippet.SnippetRepository
 import org.snippet.snippet.snippet.SnippetService
 import org.snippet.snippet.snippet.StoredViolation
+import org.snippet.snippet.testcase.TestCaseRepository
 import org.springframework.data.repository.findByIdOrNull
+import java.time.Instant
+import java.util.UUID
 
 /**
  * Applies each result of `snippet:results` (table "Cuándo se publica y qué hace cada resultado" in
@@ -33,6 +37,7 @@ class ResultHandler(
     private val jobs: SnippetJobs,
     private val assets: AssetClient,
     private val background: BackgroundCalls,
+    private val testCases: TestCaseRepository,
     private val json: ObjectMapper,
 ) : StreamHandler {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -41,8 +46,7 @@ class ResultHandler(
         withCorrelationId(entry) {
             val (type, result) = parse(entry) ?: return@withCorrelationId
             if (type == JobType.TEST) {
-                // TODO(etapa 7): guardar `lastResult` del test (US-16) si el jobId es el último publicado para ese test; FAILED solo log
-                log.info("Ignoring TEST result {} until tests are processed", result.jobId)
+                applyTest(result)
                 return@withCorrelationId
             }
             val snippet = current(type, result) ?: return@withCorrelationId
@@ -78,6 +82,28 @@ class ResultHandler(
         }
         val violations = diagnostics(result, "violations")
         setCompliance(snippet, if (violations.isEmpty()) Compliance.COMPLIANT else Compliance.NOT_COMPLIANT, violations)
+    }
+
+    /** US-16: the test's `lastResult`, only if this is still its latest TEST job; FAILED is only logged. */
+    private fun applyTest(result: ResultMessage) {
+        if (result.status == ResultStatus.FAILED) {
+            log.warn("TEST job {} of snippet {} failed: {}", result.jobId, result.snippetId, result.error)
+            return
+        }
+        val testId =
+            result.result
+                ?.get("testId")
+                ?.asText()
+                ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+        val status =
+            result.result
+                ?.get("status")
+                ?.asText()
+                ?.let { runCatching { TestStatus.fromValue(it) }.getOrNull() }
+        if (testId == null || status == null) return log.error("TEST result {} has no valid testId or status", result.jobId)
+        if (testCases.updateResultOfJob(testId, result.jobId, status, Instant.now()) == 0) {
+            log.info("Ignoring TEST result {}: test {} is gone or has a newer run", result.jobId, testId)
+        }
     }
 
     private fun applyFormat(

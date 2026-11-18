@@ -31,6 +31,17 @@ data class JobMessage(
     val rules: List<RuleConfig>? = null,
 )
 
+/** Payload of a TEST job (US-16): one per test of the snippet. */
+data class TestJobMessage(
+    val jobId: UUID,
+    val snippetId: UUID,
+    val testId: UUID,
+    val version: String,
+    val content: String,
+    val inputs: List<String>,
+    val expectedOutputs: List<String>,
+)
+
 enum class ResultStatus { OK, FAILED }
 
 /** Payload of `snippet:results`. [result] depends on the type and is absent when FAILED. */

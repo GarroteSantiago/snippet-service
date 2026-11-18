@@ -82,8 +82,18 @@ class ProcessingFixture(
     val tracker = InMemoryJobTracker()
     val rules = InMemoryRuleRepository()
     val ruleStore = RuleStore(rules, runner as RunnerClient)
+    val testCases = InMemoryTestCaseRepository()
     val jobs =
-        SnippetJobs(tracker, streams, StreamProperties(), ruleStore, repository as SnippetRepository, assets as AssetClient, json)
+        SnippetJobs(
+            tracker,
+            streams,
+            StreamProperties(),
+            ruleStore,
+            repository as SnippetRepository,
+            assets as AssetClient,
+            testCases,
+            json,
+        )
 
     /** Jobs published so far, as (type, payload). */
     fun publishedJobs(): List<Pair<String, JsonNode>> =

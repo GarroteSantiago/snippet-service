@@ -2,6 +2,7 @@ package org.snippet.snippet.processing
 
 import org.junit.jupiter.api.Test
 import org.snippet.snippet.clients.runner.Diagnostic
+import org.snippet.snippet.clients.runner.TestStatus
 import org.snippet.snippet.common.http.BackgroundCalls
 import org.snippet.snippet.common.streams.StreamProperties
 import org.snippet.snippet.common.streams.StreamWorker
@@ -11,6 +12,7 @@ import org.snippet.snippet.snippet.SnippetService.Companion.CONTENT
 import org.snippet.snippet.snippet.SnippetService.Companion.FORMATTED
 import org.snippet.snippet.snippet.StoredViolation
 import org.snippet.snippet.support.ProcessingFixture
+import org.snippet.snippet.testcase.TestCase
 import java.time.Duration
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -31,7 +33,7 @@ class ResultHandlerTest {
     private val fixture = ProcessingFixture()
     private val background = RecordingBackgroundCalls()
     private val handler =
-        ResultHandler(fixture.repository, fixture.tracker, fixture.jobs, fixture.assets, background, fixture.json)
+        ResultHandler(fixture.repository, fixture.tracker, fixture.jobs, fixture.assets, background, fixture.testCases, fixture.json)
     private val worker =
         StreamWorker(fixture.streams, Streams.RESULTS, Streams.GROUP, "snippet-1", handler, StreamProperties()).apply { createGroup() }
 
@@ -218,8 +220,22 @@ class ResultHandlerTest {
     }
 
     @Test
-    fun `test results are acked and left for stage 7, and malformed results are dropped`() {
-        send(JobType.TEST, UUID.randomUUID(), """{"testId":"t","status":"success","outputs":[]}""")
+    fun `a test result of its latest run sets the last result and older runs are ignored`() {
+        val test = TestCase(UUID.randomUUID(), snippet.id, "greets").also { fixture.testCases.save(it) }
+        val latest = UUID.randomUUID().also { test.lastJobId = it }
+
+        send(JobType.TEST, UUID.randomUUID(), """{"testId":"${test.id}","status":"fail","outputs":[]}""")
+        worker.pollOnce()
+        assertNull(test.lastResult)
+
+        send(JobType.TEST, latest, """{"testId":"${test.id}","status":"success","outputs":["hi"]}""")
+        worker.pollOnce()
+        assertEquals(TestStatus.SUCCESS, test.lastResult)
+        assertAllAcked()
+    }
+
+    @Test
+    fun `malformed results are dropped`() {
         fixture.streams.add(Streams.RESULTS, mapOf(Streams.TYPE to "LINT", Streams.PAYLOAD to "{oops"), 10_000)
         worker.pollOnce()
 

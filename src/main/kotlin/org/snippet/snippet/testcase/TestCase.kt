@@ -32,6 +32,9 @@ class TestCase(
     var lastResult: TestStatus? = null,
     @Column(name = "last_run_at")
     var lastRunAt: Instant? = null,
+    // Latest TEST job published for this test (US-16); results of older jobs are ignored
+    @Column(name = "last_job_id")
+    var lastJobId: UUID? = null,
     @Column(name = "created_at")
     val createdAt: Instant = Instant.now(),
     @Column(name = "updated_at")

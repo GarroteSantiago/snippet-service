@@ -13,6 +13,7 @@ import org.snippet.snippet.snippet.UpdateSnippetRequest
 import org.snippet.snippet.support.FakePermissions
 import org.snippet.snippet.support.FakeUsers
 import org.snippet.snippet.support.ProcessingFixture
+import org.snippet.snippet.testcase.TestCase
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -97,6 +98,22 @@ class SnippetJobsTest {
         assertEquals("println(2);", fixture.jobsOf(id, "FORMAT").single()["content"].asText())
         assertEquals("indentation", fixture.jobsOf(id, "FORMAT").single()["rules"][0]["name"].asText())
         assertEquals("println(2);", fixture.jobsOf(id, "LINT").last()["content"].asText())
+    }
+
+    @Test
+    fun `changing the content publishes a TEST per test and records the job on the test`() {
+        val id = create()
+        val test = TestCase(UUID.randomUUID(), id, "greets", mutableListOf("Ana"), mutableListOf("Hi Ana"))
+        fixture.testCases.save(test)
+
+        service.update(alice, id, UpdateSnippetRequest(content = "println(2);"))
+
+        val job = fixture.jobsOf(id, "TEST").single()
+        assertEquals(test.id.toString(), job["testId"].asText())
+        assertEquals("println(2);", job["content"].asText())
+        assertEquals("Ana", job["inputs"][0].asText())
+        assertEquals("Hi Ana", job["expectedOutputs"][0].asText())
+        assertEquals(job["jobId"].asText(), test.lastJobId.toString())
     }
 
     @Test

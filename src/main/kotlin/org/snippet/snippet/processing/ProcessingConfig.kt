@@ -11,6 +11,7 @@ import org.snippet.snippet.common.streams.StreamProperties
 import org.snippet.snippet.common.streams.StreamWorker
 import org.snippet.snippet.common.streams.StreamWorkerLifecycle
 import org.snippet.snippet.snippet.SnippetRepository
+import org.snippet.snippet.testcase.TestCaseRepository
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
@@ -44,13 +45,14 @@ class ProcessingConfig {
         jobs: SnippetJobs,
         assets: AssetClient,
         background: BackgroundCalls,
+        testCases: TestCaseRepository,
         json: ObjectMapper,
     ) = StreamWorker(
         client = client,
         stream = Streams.RESULTS,
         group = Streams.GROUP,
         consumer = properties.consumer(),
-        handler = ResultHandler(repository, tracker, jobs, assets, background, json),
+        handler = ResultHandler(repository, tracker, jobs, assets, background, testCases, json),
         properties = properties,
     )
 

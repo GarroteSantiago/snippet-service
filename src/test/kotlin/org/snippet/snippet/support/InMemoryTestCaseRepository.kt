@@ -39,4 +39,20 @@ class InMemoryTestCaseRepository(
         test.lastRunAt = runAt
         return 1
     }
+
+    override fun updateLastJob(
+        id: UUID,
+        jobId: UUID,
+    ): Int {
+        val test = tests[id] ?: return 0
+        test.lastJobId = jobId
+        return 1
+    }
+
+    override fun updateResultOfJob(
+        id: UUID,
+        jobId: UUID,
+        result: TestStatus,
+        runAt: Instant,
+    ): Int = if (tests[id]?.lastJobId == jobId) updateResult(id, result, runAt) else 0
 }
