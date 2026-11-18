@@ -72,6 +72,13 @@ Según `contracts/redis-streams.md`. `processing/SnippetJobs` publica en `snippe
 - `streams.enabled: false` apaga el consumidor y el chequeo (se sigue publicando); así corren los tests sin Redis. `ProcessingIntegrationTest` usa Postgres y Redis con Testcontainers (corre en CI); la lógica también está cubierta sin Docker con un Redis en memoria (`support/FakeStreamClient`). El dev shell trae `redis` para probar a mano.
 - Los `TEST` (US-16) son de la etapa 7: se marcan con `TODO(etapa 7)` donde se publican y donde se procesan sus resultados (hoy se confirman sin hacer nada).
 
+## Tests de snippets
+
+- Tabla `test_case` (`V4__create_test_case.sql`): nombre, `inputs` y `expected_outputs` (jsonb), `last_result` (`success`/`fail`, null si nunca corrió) y `last_run_at`. La FK a `snippet` es `ON DELETE CASCADE`: borrar el snippet borra sus tests.
+- Mismas reglas de acceso que el snippet (`snippet/SnippetAccess.kt`): listar y correr piden `READ`; crear, editar y borrar, `OWNER`. Un test de otro snippet es `404`.
+- Correr un test lee el contenido del Asset Service y llama a `POST /test` del Runner con la versión del snippet. Correr uno guardado guarda `last_result`; el ad hoc (`/tests/run`) no guarda nada. Editar un test borra su último resultado.
+- Para US-16: `TestCaseService.testsOfSnippet` (los tests a publicar) y `TestCaseService.recordResult` (guarda el resultado por id de test, sin chequear permisos).
+
 ## Ramas y CI
 
 - `dev` y `prod`. Se trabaja en ramas cortas con pull request a `dev`; `prod` recibe merges desde `dev`.

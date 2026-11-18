@@ -6,6 +6,8 @@ import org.snippet.snippet.clients.runner.Diagnostic
 import org.snippet.snippet.clients.runner.RestRunnerClient
 import org.snippet.snippet.clients.runner.RuleConfig
 import org.snippet.snippet.clients.runner.RuleType
+import org.snippet.snippet.clients.runner.TestResult
+import org.snippet.snippet.clients.runner.TestStatus
 import org.snippet.snippet.common.error.BadRequestException
 import org.snippet.snippet.common.error.InvalidCodeException
 import org.snippet.snippet.common.error.UpstreamException
@@ -104,6 +106,49 @@ class RunnerClientTest {
         val error = assertThrows<InvalidCodeException> { client.format("!!", "1.1", emptyList()) }
 
         assertEquals(listOf(Diagnostic(null, "Unexpected", 2, 1)), error.diagnostics)
+    }
+
+    @Test
+    fun `runs a test with its inputs and expected outputs`() {
+        server
+            .expect(requestTo("http://runner/test"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(
+                content().json(
+                    """{"content":"println(readInput(\"\"));","version":"1.1","inputs":["a"],"expectedOutputs":["b"]}""",
+                    JsonCompareMode.STRICT,
+                ),
+            ).andRespond(withSuccess("""{"status":"fail","outputs":["a"]}""", MediaType.APPLICATION_JSON))
+
+        val result = client.test("println(readInput(\"\"));", "1.1", listOf("a"), listOf("b"))
+
+        assertEquals(TestResult(TestStatus.FAIL, listOf("a"), emptyList()), result)
+    }
+
+    @Test
+    fun `a test run keeps the runner's errors`() {
+        server
+            .expect(requestTo("http://runner/test"))
+            .andRespond(
+                withSuccess(
+                    """{"status":"fail","outputs":[],"errors":[{"rule":null,"message":"Boom","line":1,"column":2}]}""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        val result = client.test("x", "1.1", emptyList(), emptyList())
+
+        assertEquals(listOf(Diagnostic(null, "Boom", 1, 2)), result.errors)
+    }
+
+    @Test
+    fun `a test status outside the contract or a 400 is an upstream error`() {
+        val unknownStatus = """{"status":"error","outputs":[]}"""
+        server.expect(requestTo("http://runner/test")).andRespond(withSuccess(unknownStatus, MediaType.APPLICATION_JSON))
+        server.expect(requestTo("http://runner/test")).andRespond(withStatus(HttpStatus.BAD_REQUEST))
+
+        assertThrows<UpstreamException> { client.test("x", "1.1", emptyList(), emptyList()) }
+        assertThrows<UpstreamException> { client.test("x", "1.1", emptyList(), emptyList()) }
     }
 
     @Test

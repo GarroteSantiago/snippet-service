@@ -2,22 +2,18 @@ package org.snippet.snippet.snippet
 
 import org.slf4j.LoggerFactory
 import org.snippet.snippet.clients.asset.AssetClient
-import org.snippet.snippet.clients.asset.RestAssetClient
 import org.snippet.snippet.clients.permission.Action
 import org.snippet.snippet.clients.permission.PermissionClient
 import org.snippet.snippet.clients.permission.Role
 import org.snippet.snippet.clients.runner.Diagnostic
 import org.snippet.snippet.clients.runner.RunnerClient
-import org.snippet.snippet.common.error.ForbiddenException
 import org.snippet.snippet.common.error.InvalidCodeException
 import org.snippet.snippet.common.error.NotFoundException
-import org.snippet.snippet.common.error.UpstreamException
 import org.snippet.snippet.common.security.CurrentUser
 import org.snippet.snippet.language.LanguageCatalog
 import org.snippet.snippet.processing.SnippetJobs
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
-import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Service
 import java.time.Instant
 import java.util.UUID
@@ -139,6 +135,7 @@ class SnippetService(
             jobs.lint(snippet, content)
             jobs.format(snippet, content)
             // TODO(etapa 7): publicar un TEST por cada test del snippet (US-16), registrando el jobId de cada uno
+            // Un TEST por cada TestCaseService.testsOfSnippet(id); el consumidor de resultados llama a TestCaseService.recordResult
         }
         return snippet.toResponse(role, content)
     }
@@ -154,8 +151,8 @@ class SnippetService(
     ) {
         authorize(user, id, Action.WRITE)
         val snippet = find(id)
+        // Its tests go with it: `test_case.snippet_id` is ON DELETE CASCADE
         repository.delete(snippet)
-        // TODO(etapa 7): borrar los tests del snippet (o dejar que los borre la FK en cascada)
         undo("content of $id") { assets.delete(CONTENT, snippet.key) }
         undo("formatted content of $id") { assets.delete(FORMATTED, snippet.key) }
         undo("permissions of $id") { permissions.revokeAll(id) }
@@ -203,22 +200,11 @@ class SnippetService(
         user: CurrentUser,
         id: UUID,
         action: Action,
-    ): Role {
-        val check = permissions.check(id, user.id, action)
-        return when {
-            check.allowed -> check.role ?: if (action == Action.WRITE) Role.OWNER else Role.READ
-            check.role == null -> throw notFound(id)
-            else -> throw ForbiddenException("Only the owner can change snippet $id")
-        }
-    }
+    ): Role = permissions.authorize(user, id, action)
 
-    private fun find(id: UUID): Snippet = repository.findByIdOrNull(id) ?: throw notFound(id)
+    private fun find(id: UUID): Snippet = repository.findOrNotFound(id)
 
-    private fun notFound(id: UUID) = NotFoundException("Snippet $id not found")
-
-    private fun content(snippet: Snippet): String =
-        assets.get(CONTENT, snippet.key)
-            ?: throw UpstreamException(RestAssetClient.SERVICE, "content of snippet ${snippet.id} is missing")
+    private fun content(snippet: Snippet): String = assets.contentOf(snippet)
 
     private fun requireValid(
         content: String,
