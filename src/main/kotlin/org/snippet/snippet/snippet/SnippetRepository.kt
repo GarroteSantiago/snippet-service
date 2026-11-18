@@ -7,7 +7,9 @@ import java.util.UUID
 
 interface SnippetRepository :
     JpaRepository<Snippet, UUID>,
-    JpaSpecificationExecutor<Snippet>
+    JpaSpecificationExecutor<Snippet> {
+    fun findAllByOwnerId(ownerId: String): List<Snippet>
+}
 
 /** Filters of the listing (US-05). Null means "don't filter". */
 data class SnippetFilter(

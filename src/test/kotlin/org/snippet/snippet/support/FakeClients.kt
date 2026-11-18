@@ -13,6 +13,7 @@ import org.snippet.snippet.clients.runner.RuleType
 import org.snippet.snippet.clients.runner.RunnerClient
 import org.snippet.snippet.clients.runner.ValidationResult
 import org.snippet.snippet.clients.runner.Versions
+import org.snippet.snippet.common.error.BadRequestException
 import org.snippet.snippet.common.error.InvalidCodeException
 import org.snippet.snippet.common.error.UpstreamException
 import java.util.UUID
@@ -21,18 +22,32 @@ import java.util.UUID
 
 /** Code containing [INVALID] doesn't parse. */
 class FakeRunner : RunnerClient {
-    var versions = Versions("printscript", listOf("1.0", "1.1"), "1.1")
+    var versions = Versions("printscript", listOf("1.0", "1.1"), "1.1", "2.0.0")
     val formatRules = listOf(RuleConfig("indentation", true, 4, "Spaces per level"))
+    val lintRules = listOf(RuleConfig("identifier_format", true, "camel case", "Naming style"))
+    var versionCalls = 0
     var lastFormatRules: List<RuleConfig>? = null
 
-    override fun versions() = versions
+    override fun versions(): Versions {
+        versionCalls++
+        return versions
+    }
 
     override fun validate(
         content: String,
         version: String,
     ) = if (INVALID in content) ValidationResult(false, listOf(DIAGNOSTIC)) else ValidationResult(true)
 
-    override fun defaultRules(ruleType: RuleType) = formatRules
+    override fun defaultRules(ruleType: RuleType) = if (ruleType == RuleType.FORMAT) formatRules else lintRules
+
+    /** A value of [BAD_VALUE] is out of range, as the Runner would say. */
+    override fun validateRules(
+        ruleType: RuleType,
+        rules: List<RuleConfig>,
+        version: String,
+    ) {
+        rules.find { it.value == BAD_VALUE }?.let { throw BadRequestException("Rule '${it.name}' is out of range") }
+    }
 
     override fun format(
         content: String,
@@ -46,6 +61,7 @@ class FakeRunner : RunnerClient {
 
     companion object {
         const val INVALID = "!!"
+        const val BAD_VALUE = "out of range"
         val DIAGNOSTIC = Diagnostic(null, "Unexpected '!'", 1, 3)
     }
 }

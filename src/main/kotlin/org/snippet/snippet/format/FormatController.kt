@@ -5,6 +5,9 @@ import jakarta.validation.constraints.NotBlank
 import org.snippet.snippet.clients.runner.RuleType
 import org.snippet.snippet.clients.runner.RunnerClient
 import org.snippet.snippet.language.LanguageCatalog
+import org.snippet.snippet.rules.RuleStore
+import org.springframework.security.core.annotation.AuthenticationPrincipal
+import org.springframework.security.oauth2.jwt.Jwt
 import org.springframework.stereotype.Service
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
@@ -26,12 +29,15 @@ data class FormatResponse(
 class FormatService(
     private val runner: RunnerClient,
     private val languages: LanguageCatalog,
+    private val ruleStore: RuleStore,
 ) {
-    /** Invalid code comes back from the Runner as 422 with its diagnostics. */
-    fun format(request: FormatRequest): String {
+    /** Formats with [userId]'s format rules (US-11). Invalid code comes back from the Runner as 422 with its diagnostics. */
+    fun format(
+        request: FormatRequest,
+        userId: String,
+    ): String {
         languages.requireSupported(request.language, request.version)
-        // TODO(etapa 6): usar las reglas de formato del usuario (US-11); por ahora, las de PrintScript por defecto
-        val rules = runner.defaultRules(RuleType.FORMAT)
+        val rules = ruleStore.rulesOf(userId, RuleType.FORMAT)
         return runner.format(request.content, request.version, rules)
     }
 }
@@ -42,6 +48,7 @@ class FormatController(
 ) {
     @PostMapping("/format")
     fun format(
+        @AuthenticationPrincipal jwt: Jwt,
         @Valid @RequestBody request: FormatRequest,
-    ): FormatResponse = FormatResponse(service.format(request))
+    ): FormatResponse = FormatResponse(service.format(request, jwt.subject))
 }

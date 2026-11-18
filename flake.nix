@@ -29,6 +29,7 @@
             curl
             jq
             postgresql
+            redis
           ];
 
           JAVA_HOME = java.home;

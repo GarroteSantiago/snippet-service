@@ -14,6 +14,7 @@ import org.snippet.snippet.common.error.NotFoundException
 import org.snippet.snippet.common.error.UpstreamException
 import org.snippet.snippet.common.security.CurrentUser
 import org.snippet.snippet.language.LanguageCatalog
+import org.snippet.snippet.processing.SnippetJobs
 import org.springframework.data.domain.PageRequest
 import org.springframework.data.domain.Sort
 import org.springframework.data.repository.findByIdOrNull
@@ -35,6 +36,7 @@ class SnippetService(
     private val runner: RunnerClient,
     private val assets: AssetClient,
     private val languages: LanguageCatalog,
+    private val jobs: SnippetJobs,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -73,7 +75,8 @@ class SnippetService(
             undo("metadata of ${snippet.id}") { repository.deleteById(snippet.id) }
             throw e
         }
-        // TODO(etapa 6): publicar el pedido de LINT en Redis; compliance queda en pending hasta el resultado
+        // compliance stays pending until the result arrives (or goes to failed if it can't be published)
+        jobs.lint(snippet, request.content)
         return snippet.toResponse(Role.OWNER, request.content)
     }
 
@@ -131,8 +134,12 @@ class SnippetService(
                 throw e
             }
         }
-        // TODO(etapa 6): si cambió el código, publicar LINT y FORMAT en Redis (la versión formateada queda vieja)
-        // TODO(etapa 7): si cambió el código, correr los tests del snippet en segundo plano (US-16)
+        if (codeChanged) {
+            // The formatted version is stale until the FORMAT result replaces it
+            jobs.lint(snippet, content)
+            jobs.format(snippet, content)
+            // TODO(etapa 7): publicar un TEST por cada test del snippet (US-16), registrando el jobId de cada uno
+        }
         return snippet.toResponse(role, content)
     }
 

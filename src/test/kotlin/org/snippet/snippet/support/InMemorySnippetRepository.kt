@@ -30,6 +30,10 @@ class InMemorySnippetRepository(
 
     override fun findById(id: UUID): Optional<Snippet> = Optional.ofNullable(snippets[id])
 
+    override fun findAllByOwnerId(ownerId: String): List<Snippet> = snippets.values.filter { it.ownerId == ownerId }
+
+    override fun findAll(): List<Snippet> = snippets.values.toList()
+
     override fun deleteById(id: UUID) {
         snippets.remove(id)
     }

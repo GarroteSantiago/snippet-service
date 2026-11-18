@@ -2,6 +2,7 @@ package org.snippet.snippet.clients.runner
 
 import com.fasterxml.jackson.annotation.JsonInclude
 import org.snippet.snippet.clients.upstream
+import org.snippet.snippet.common.error.BadRequestException
 import org.snippet.snippet.common.error.InvalidCodeException
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.ParameterizedTypeReference
@@ -23,6 +24,8 @@ data class Versions(
     val language: String,
     val versions: List<String>,
     val latest: String,
+    /** Version of the PrintScript library the Runner uses (US-18). Null if the Runner doesn't say. */
+    val parserVersion: String? = null,
 )
 
 data class ValidationResult(
@@ -65,6 +68,17 @@ interface RunnerClient {
         version: String,
         rules: List<RuleConfig>,
     ): String
+
+    /**
+     * Checks [rules] with the Runner's own validation (unknown names, values out of range,
+     * opposite rules both active), so they're never duplicated here. Throws
+     * [BadRequestException] with the Runner's reason when they're invalid.
+     */
+    fun validateRules(
+        ruleType: RuleType,
+        rules: List<RuleConfig>,
+        version: String,
+    )
 }
 
 @Component
@@ -124,6 +138,28 @@ class RestRunnerClient(
             }
         }.content
 
+    override fun validateRules(
+        ruleType: RuleType,
+        rules: List<RuleConfig>,
+        version: String,
+    ) {
+        // The contract has no endpoint just for this: run the rules over a snippet that always
+        // parses. The Runner checks the rules before looking at the code, so a 400 is about them.
+        upstream(SERVICE) {
+            try {
+                client
+                    .post()
+                    .uri("/{ruleType}", ruleType.path)
+                    .body(RulesRequest(RULES_PROBE, version, rules.map { it.copy(description = null) }))
+                    .retrieve()
+                    .toBodilessEntity()
+            } catch (e: HttpClientErrorException.BadRequest) {
+                val detail = runCatching { e.getResponseBodyAs(RunnerProblem::class.java)?.detail }.getOrNull()
+                throw BadRequestException(detail ?: "Invalid ${ruleType.path} rules")
+            }
+        }
+    }
+
     private fun RestClientResponseException.diagnostics(): List<Diagnostic> =
         runCatching { getResponseBodyAs(RunnerProblem::class.java)?.diagnostics }.getOrNull().orEmpty()
 
@@ -143,10 +179,14 @@ class RestRunnerClient(
     )
 
     private data class RunnerProblem(
+        val detail: String? = null,
         val diagnostics: List<Diagnostic>? = null,
     )
 
     companion object {
         const val SERVICE = "PrintScript Runner"
+
+        /** Valid in every PrintScript version. */
+        private const val RULES_PROBE = "println(1);"
     }
 }

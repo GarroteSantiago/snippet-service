@@ -15,6 +15,10 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/snippet}
     username: ${DB_USER:snippet}
     password: ${DB_PASSWORD:snippet}
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   jpa:
     open-in-view: false
     hibernate:
@@ -55,3 +59,20 @@ services:
 languages:
   extensions:
     printscript: ps
+
+# Productor de snippet:jobs y consumidor de snippet:results (contracts/redis-streams.md)
+streams:
+  # Apaga el consumidor y el chequeo de parserVersion (se sigue publicando)
+  enabled: true
+  # Vacío: el hostname del contenedor, así cada réplica es un consumidor distinto
+  consumer-name: ${STREAMS_CONSUMER_NAME:}
+  max-length: 10000
+  batch-size: 10
+  block: 2s
+  reclaim-interval: 30s
+  min-idle: 60s
+  max-deliveries: 3
+
+# US-18: cada cuánto se pregunta el parserVersion al Runner (también al arrancar)
+parser-version:
+  check-interval: 5m

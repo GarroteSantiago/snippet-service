@@ -6,3 +6,17 @@ spring:
           # El decoder se crea de forma diferida: con estos valores no se sale a la red
           issuer-uri: https://snippet-searcher.test/
           audiences: https://snippet-searcher.test/api
+  data:
+    redis:
+      # Ningún test sale a un Redis real salvo los de Testcontainers, que lo pisan
+      host: localhost
+      port: 1
+
+# Sin consumidor ni chequeo de parserVersion salvo en los tests que lo prenden
+streams:
+  enabled: false
+
+management:
+  health:
+    redis:
+      enabled: false

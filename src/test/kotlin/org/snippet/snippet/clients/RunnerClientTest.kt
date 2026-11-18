@@ -6,6 +6,7 @@ import org.snippet.snippet.clients.runner.Diagnostic
 import org.snippet.snippet.clients.runner.RestRunnerClient
 import org.snippet.snippet.clients.runner.RuleConfig
 import org.snippet.snippet.clients.runner.RuleType
+import org.snippet.snippet.common.error.BadRequestException
 import org.snippet.snippet.common.error.InvalidCodeException
 import org.snippet.snippet.common.error.UpstreamException
 import org.springframework.http.HttpMethod
@@ -110,5 +111,45 @@ class RunnerClientTest {
         server.expect(requestTo("http://runner/versions")).andRespond(withServerError())
 
         assertThrows<UpstreamException> { client.versions() }
+    }
+
+    @Test
+    fun `reads the parser version`() {
+        server
+            .expect(requestTo("http://runner/versions"))
+            .andRespond(
+                withSuccess(
+                    """{"language":"printscript","versions":["1.1"],"latest":"1.1","parserVersion":"2.0.0"}""",
+                    MediaType.APPLICATION_JSON,
+                ),
+            )
+
+        assertEquals("2.0.0", client.versions().parserVersion)
+    }
+
+    @Test
+    fun `rules are checked by running them over a probe, and a 400 is a bad request with the runner's reason`() {
+        server
+            .expect(requestTo("http://runner/lint"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(
+                content().json(
+                    """{"content":"println(1);","version":"1.1","rules":[{"name":"identifier_format","isActive":true,"value":"x"}]}""",
+                    JsonCompareMode.STRICT,
+                ),
+            ).andRespond(
+                withStatus(HttpStatus.BAD_REQUEST)
+                    .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+                    .body("""{"status":400,"detail":"Rule 'identifier_format' must be one of 'camel case'"}"""),
+            )
+        server.expect(requestTo("http://runner/format")).andRespond(withSuccess("""{"content":""}""", MediaType.APPLICATION_JSON))
+
+        val error =
+            assertThrows<BadRequestException> {
+                client.validateRules(RuleType.LINT, listOf(RuleConfig("identifier_format", true, "x")), "1.1")
+            }
+        assertEquals("Rule 'identifier_format' must be one of 'camel case'", error.message)
+        client.validateRules(RuleType.FORMAT, listOf(RuleConfig("indentation", true, 2)), "1.1")
+        server.verify()
     }
 }

@@ -14,10 +14,9 @@ import org.snippet.snippet.language.LanguageCatalog
 import org.snippet.snippet.language.LanguageProperties
 import org.snippet.snippet.snippet.SnippetService.Companion.CONTENT
 import org.snippet.snippet.snippet.SnippetService.Companion.FORMATTED
-import org.snippet.snippet.support.FakeAssets
 import org.snippet.snippet.support.FakePermissions
 import org.snippet.snippet.support.FakeRunner
-import org.snippet.snippet.support.InMemorySnippetRepository
+import org.snippet.snippet.support.ProcessingFixture
 import org.springframework.data.domain.Sort
 import java.util.UUID
 import kotlin.test.assertEquals
@@ -25,12 +24,13 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SnippetServiceTest {
-    private val repository = InMemorySnippetRepository()
+    private val processing = ProcessingFixture()
+    private val repository = processing.repository
     private val permissions = FakePermissions()
-    private val runner = FakeRunner()
-    private val assets = FakeAssets()
+    private val runner = processing.runner
+    private val assets = processing.assets
     private val service =
-        SnippetService(repository, permissions, runner, assets, LanguageCatalog(runner, LanguageProperties()))
+        SnippetService(repository, permissions, runner, assets, LanguageCatalog(runner, LanguageProperties()), processing.jobs)
 
     private val alice = CurrentUser("auth0|alice", "Alice")
     private val bob = CurrentUser("auth0|bob", "Bob")

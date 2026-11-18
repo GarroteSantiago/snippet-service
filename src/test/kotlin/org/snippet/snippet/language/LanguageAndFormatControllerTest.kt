@@ -49,7 +49,7 @@ class LanguageAndFormatControllerTest(
 
     @Test
     fun `formats content`() {
-        given(formatService.format(FormatRequest("let x=1;", "printscript", "1.1"))).willReturn("let x = 1;\n")
+        given(formatService.format(FormatRequest("let x=1;", "printscript", "1.1"), "user")).willReturn("let x = 1;\n")
 
         mockMvc
             .post("/format") {
@@ -64,7 +64,7 @@ class LanguageAndFormatControllerTest(
 
     @Test
     fun `format of invalid code is 422 with diagnostics`() {
-        given(formatService.format(FormatRequest("!!", "printscript", "1.1")))
+        given(formatService.format(FormatRequest("!!", "printscript", "1.1"), "user"))
             .willThrow(InvalidCodeException(listOf(Diagnostic(null, "Unexpected", 1, 1))))
 
         mockMvc
