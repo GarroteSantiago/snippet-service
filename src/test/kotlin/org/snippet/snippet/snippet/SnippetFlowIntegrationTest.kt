@@ -73,6 +73,8 @@ class SnippetFlowIntegrationTest(
         @Primary
         fun fakeStreams(): StreamClient = FakeStreamClient()
 
+        @Bean
+        @Primary
         fun fakeUsers(): UserDirectory = FakeUsers(UserSummary("auth0|alice", "alice"), UserSummary("auth0|bob", "Bob"))
     }
 

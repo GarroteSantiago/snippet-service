@@ -7,7 +7,7 @@ Parte de Snippet Searcher. Contrato de la API: `contracts/snippet-service.openap
 ## Requisitos
 
 - [Nix](https://nixos.org) con flakes. El dev shell trae JDK 21, Gradle, docker-compose y utilidades.
-- Docker (para Testcontainers y para correr el sistema completo). En NixOS: `virtualisation.docker.enable = true;` en la configuración del sistema.
+- Contenedores: el dev shell trae Podman rootless y lo deja listo para `docker-compose` y Testcontainers (`DOCKER_HOST`), sin instalar nada en el sistema ni correr como root. Imágenes y contenedores quedan en `.podman/` (ignorado por git); para borrar todo: `podman unshare rm -rf .podman`. Ver `dev/podman-env.sh`.
 - Opcional: [direnv](https://direnv.net) para entrar al dev shell y cargar `.env` al hacer `cd` (`direnv allow` la primera vez).
 
 ## Uso
@@ -15,7 +15,7 @@ Parte de Snippet Searcher. Contrato de la API: `contracts/snippet-service.openap
 ```sh
 nix develop                # o direnv
 cp .env.example .env       # completar los valores de Auth0
-./gradlew check            # ktlint + tests (los de integración necesitan Docker)
+./gradlew check            # ktlint + tests (los de integración levantan Postgres/Redis con Podman)
 ./gradlew ktlintFormat     # arreglar el formato
 ./gradlew bootRun          # levanta en :$PORT; /health responde sin token
 ```

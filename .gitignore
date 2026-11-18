@@ -17,3 +17,6 @@ result
 # Local config
 .env
 .kotlin/
+
+# Contenedores rootless de este repo (dev/podman-env.sh)
+.podman/

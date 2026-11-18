@@ -22,7 +22,8 @@
             java
             (gradle.override { inherit java; })
 
-            # Contenedores (el daemon de Docker se habilita en la config de NixOS)
+            # Contenedores rootless, solo para este repo (dev/podman-env.sh)
+            podman
             docker-compose
 
             # Utilidades
@@ -33,6 +34,10 @@
           ];
 
           JAVA_HOME = java.home;
+
+          shellHook = ''
+            source ${./dev/podman-env.sh} snippet-service
+          '';
         };
       }
     );

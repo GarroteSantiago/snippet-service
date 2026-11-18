@@ -47,6 +47,9 @@ dependencies {
 
 tasks.withType<Test> {
     useJUnitPlatform()
+    // Los tests de Testcontainers se saltean sin Docker: con o sin él son resultados distintos,
+    // así que el cache de Gradle no debe reusar uno para el otro
+    inputs.property("dockerHost", providers.environmentVariable("DOCKER_HOST").orElse(""))
     finalizedBy(tasks.jacocoTestReport)
 }
 
