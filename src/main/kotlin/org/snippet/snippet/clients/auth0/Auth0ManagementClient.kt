@@ -57,14 +57,14 @@ data class Auth0ManagementProperties(
 ) {
     val configured: Boolean get() = domain.isNotBlank() && clientId.isNotBlank() && clientSecret.isNotBlank()
 
-    /** `https://{domain}`, also accepting a domain written with the scheme or a trailing slash. */
-    val baseUrl: String get() =
-        "https://" +
-            domain
-                .trim()
-                .removePrefix("https://")
-                .removePrefix("http://")
-                .trimEnd('/')
+    /**
+     * `https://{domain}`, also accepting a domain written with the scheme or a trailing slash.
+     * An explicit `http://` is kept, for the stand-in of the local login (no TLS inside compose).
+     */
+    val baseUrl: String get() {
+        val trimmed = domain.trim().trimEnd('/')
+        return if (trimmed.startsWith("http://")) trimmed else "https://" + trimmed.removePrefix("https://")
+    }
 }
 
 @Configuration

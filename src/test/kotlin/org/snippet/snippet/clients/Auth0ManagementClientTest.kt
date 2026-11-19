@@ -284,6 +284,7 @@ class Auth0ManagementClientTest {
     fun `accepts the domain with a scheme or a trailing slash`() {
         assertEquals("https://tenant.test", Auth0ManagementProperties("https://tenant.test/", "a", "b").baseUrl)
         assertEquals("https://tenant.test", Auth0ManagementProperties(" tenant.test ", "a", "b").baseUrl)
+        assertEquals("http://auth.localhost:8088", Auth0ManagementProperties("http://auth.localhost:8088/", "a", "b").baseUrl)
         assertFalse(Auth0ManagementProperties("tenant.test", "a", "").configured)
     }
 
