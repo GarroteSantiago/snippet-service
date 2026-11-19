@@ -2,11 +2,13 @@ package org.snippet.snippet.processing
 
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
+import io.micrometer.core.instrument.MeterRegistry
 import org.junit.jupiter.api.Test
 import org.snippet.snippet.clients.runner.RuleConfig
 import org.snippet.snippet.clients.runner.RuleType
 import org.snippet.snippet.clients.runner.RunnerClient
 import org.snippet.snippet.common.streams.StreamClient
+import org.snippet.snippet.common.streams.StreamStats
 import org.snippet.snippet.rules.RuleRepository
 import org.snippet.snippet.snippet.Compliance
 import org.snippet.snippet.snippet.SnippetRepository
@@ -41,6 +43,7 @@ import java.time.Duration
 import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -63,6 +66,7 @@ class ProcessingIntegrationTest(
     @param:Autowired private val tracker: JobTracker,
     @param:Autowired private val parserVersions: ParserVersionStore,
     @param:Autowired private val assets: FakeAssets,
+    @param:Autowired private val meters: MeterRegistry,
 ) {
     companion object {
         @Container
@@ -226,5 +230,28 @@ class ProcessingIntegrationTest(
         assertTrue(parserVersions.change("3.0.0"))
         assertEquals("3.0.0", parserVersions.current())
         assertTrue(parserVersions.change("2.0.0"))
+    }
+
+    @Test
+    fun `stream stats come from XLEN and XINFO GROUPS`() {
+        val stream = "stats-${UUID.randomUUID()}"
+        assertEquals(StreamStats(0, null, null), streams.stats(stream, "g"))
+        repeat(3) { streams.add(stream, mapOf(Streams.TYPE to "LINT"), 10_000) }
+        assertEquals(StreamStats(3, null, null), streams.stats(stream, "g"))
+
+        // The group starts at `$`. Redis only knows its lag once it has caught up with the stream
+        streams.createGroup(stream, "g")
+        streams.add(stream, mapOf(Streams.TYPE to "LINT"), 10_000)
+        streams.readNew(stream, "g", "c", 10, Duration.ofMillis(10))
+        repeat(2) { streams.add(stream, mapOf(Streams.TYPE to "LINT"), 10_000) }
+
+        assertEquals(StreamStats(6, 2, 1), streams.stats(stream, "g"))
+    }
+
+    @Test
+    fun `the backlog gauges of both streams are registered`() {
+        listOf(Streams.RESULTS to Streams.GROUP, Streams.JOBS to Streams.RUNNER_GROUP).forEach { (stream, group) ->
+            assertNotNull(meters.find("redis.stream.pending").tags("stream", stream, "group", group).gauge())
+        }
     }
 }

@@ -37,6 +37,15 @@ class ParserVersionWatcherTest {
     }
 
     @Test
+    fun `the jobs of one check share a correlation id`() {
+        watcher.check()
+
+        val ids = fixture.streams.entries(Streams.JOBS).map { it.fields.getValue(Streams.CORRELATION_ID) }
+        assertEquals(2, ids.size)
+        assertEquals(1, ids.toSet().size)
+    }
+
+    @Test
     fun `the same version publishes nothing and a different one revalidates again`() {
         watcher.check()
         watcher.check()

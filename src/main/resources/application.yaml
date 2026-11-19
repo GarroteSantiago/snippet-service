@@ -35,16 +35,49 @@ server:
   port: ${PORT:8080}
   shutdown: graceful
 
+logging:
+  # json (one object per line, what New Relic ingests) or plain (readable, for local dev): logback-spring.xml
+  console-format: ${LOG_FORMAT:json}
+  structured:
+    json:
+      add:
+        service: ${spring.application.name}
+
 management:
   endpoints:
     web:
       base-path: /
       exposure:
-        include: health
+        include: health, prometheus
   endpoint:
     health:
       probes:
         enabled: true
+  metrics:
+    tags:
+      service: ${spring.application.name}
+    distribution:
+      # Latency: histograms, so percentiles can be aggregated across replicas
+      percentiles-histogram:
+        http.server.requests: true
+        http.client.requests: true
+  # Micrometer metrics to New Relic over OTLP; off until there is a license key
+  otlp:
+    metrics:
+      export:
+        enabled: ${NEW_RELIC_ENABLED:false}
+        url: ${NEW_RELIC_OTLP_URL:https://otlp.nr-data.net/v1/metrics}
+        headers:
+          api-key: ${NEW_RELIC_LICENSE_KEY:}
+        # New Relic prefers delta over cumulative
+        aggregation-temporality: delta
+        step: 60s
+
+observability:
+  # Internal port where /prometheus answers without a token (NGINX doesn't proxy it); 0 turns it off
+  metrics-port: ${METRICS_PORT:9464}
+  # How often the gauges of the streams (length, lag, pending) ask Redis
+  stream-metrics-interval: 15s
 
 # Servicios que orquesta (ver contracts/)
 services:

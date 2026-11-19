@@ -1,5 +1,6 @@
 package org.snippet.snippet.common.streams
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.junit.jupiter.api.Test
 import org.snippet.snippet.support.FakeStreamClient
 import java.time.Duration
@@ -29,7 +30,8 @@ class StreamWorkerTest {
     }
 
     private val handler = RecordingHandler()
-    private val worker = StreamWorker(client, "jobs", "group", "me", handler, properties).apply { createGroup() }
+    private val meters = SimpleMeterRegistry()
+    private val worker = StreamWorker(client, "jobs", "group", "me", handler, properties, meters).apply { createGroup() }
 
     private fun publish() = client.add("jobs", mapOf("type" to "LINT"), 10_000)
 
@@ -102,5 +104,23 @@ class StreamWorkerTest {
         val worker = StreamWorker(client, "jobs", "group", "me", handler, properties).apply { createGroup() }
 
         assertEquals(0, worker.pollOnce())
+    }
+
+    @Test
+    fun `times each entry by outcome`() {
+        publish()
+        worker.pollOnce()
+        handler.fail = true
+        publish()
+        worker.pollOnce()
+
+        fun count(outcome: String) =
+            meters
+                .find(StreamWorker.METRIC)
+                .tags("stream", "jobs", "group", "group", "outcome", outcome)
+                .timer()
+                ?.count()
+        assertEquals(1, count(StreamWorker.OUTCOME_OK))
+        assertEquals(1, count(StreamWorker.OUTCOME_ERROR))
     }
 }

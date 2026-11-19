@@ -20,3 +20,9 @@ management:
   health:
     redis:
       enabled: false
+
+# Readable logs in the test output, and no extra port for /prometheus
+logging:
+  console-format: plain
+observability:
+  metrics-port: 0
