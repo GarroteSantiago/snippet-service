@@ -15,7 +15,8 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 
 /**
  * Calls to other services carry the correlation id and the caller's token,
- * as the contracts require. Applied to every `RestClient.Builder` Spring creates.
+ * as the contracts require (the service's own token in [BackgroundCalls]). Applied to every
+ * `RestClient.Builder` Spring creates.
  */
 class OutboundHeadersInterceptor : ClientHttpRequestInterceptor {
     override fun intercept(
@@ -24,9 +25,12 @@ class OutboundHeadersInterceptor : ClientHttpRequestInterceptor {
         execution: ClientHttpRequestExecution,
     ): ClientHttpResponse {
         MDC.get(CorrelationIdFilter.MDC_KEY)?.let { request.headers.set(CorrelationIdFilter.HEADER, it) }
-        val authentication = SecurityContextHolder.getContext().authentication
-        if (authentication is JwtAuthenticationToken && !request.headers.containsKey(HttpHeaders.AUTHORIZATION)) {
-            request.headers.setBearerAuth(authentication.token.tokenValue)
+        // Inside BackgroundCalls.call the service's token, else the user's; an explicit header wins over both
+        val token =
+            BackgroundCalls.currentToken()
+                ?: (SecurityContextHolder.getContext().authentication as? JwtAuthenticationToken)?.token?.tokenValue
+        if (token != null && !request.headers.containsKey(HttpHeaders.AUTHORIZATION)) {
+            request.headers.setBearerAuth(token)
         }
         return execution.execute(request, body)
     }

@@ -20,8 +20,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ResultHandlerTest {
-    /** Stands in for the future M2M token: counts the calls made without a user. */
-    private class RecordingBackgroundCalls : BackgroundCalls() {
+    /** Without credentials (no token): only counts the calls made without a user. */
+    private class RecordingBackgroundCalls : BackgroundCalls(token = null) {
         var calls = 0
 
         override fun <T> call(block: () -> T): T {

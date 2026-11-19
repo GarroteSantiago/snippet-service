@@ -3,22 +3,17 @@ package org.snippet.snippet.clients.auth0
 import com.fasterxml.jackson.annotation.JsonProperty
 import org.snippet.snippet.clients.upstream
 import org.snippet.snippet.common.error.UpstreamException
+import org.snippet.snippet.common.http.ClientCredentialsToken
 import org.snippet.snippet.common.http.OutboundHeadersInterceptor
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Configuration
-import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
-import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.client.HttpClientErrorException
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.body
 import java.time.Clock
-import java.time.Duration
-import java.time.Instant
-import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 /** `User` in the public contract. */
 data class UserSummary(
@@ -92,16 +87,18 @@ class Auth0ManagementClient(
     @Autowired
     constructor(builder: RestClient.Builder, properties: Auth0ManagementProperties) : this(builder, properties, Clock.systemUTC())
 
-    private val client =
-        builder
-            .clone()
-            .requestInterceptors { interceptors -> interceptors.removeIf { it is OutboundHeadersInterceptor } }
-            .build()
+    private val client = ClientCredentialsToken.withoutForwardedToken(builder)
 
-    private val lock = ReentrantLock()
-
-    @Volatile
-    private var token: CachedToken? = null
+    private val token =
+        ClientCredentialsToken(
+            client = client,
+            service = SERVICE,
+            tokenUri = "${properties.baseUrl}/oauth/token",
+            clientId = properties.clientId,
+            clientSecret = properties.clientSecret,
+            audience = "${properties.baseUrl}/api/v2/",
+            clock = clock,
+        )
 
     override fun search(
         name: String?,
@@ -154,41 +151,13 @@ class Auth0ManagementClient(
         try {
             call()
         } catch (e: UpstreamException) {
-            if (e.cause is HttpClientErrorException.Unauthorized) token = null
+            if (e.cause is HttpClientErrorException.Unauthorized) token.invalidate()
             throw e
         }
 
     private fun accessToken(): String {
         requireConfigured()
-        token?.takeIf { it.isFresh() }?.let { return it.value }
-        return lock.withLock {
-            // Another thread may have fetched it while this one waited
-            token?.takeIf { it.isFresh() }?.value ?: fetchToken().also { token = it }.value
-        }
-    }
-
-    private fun fetchToken(): CachedToken {
-        val form =
-            LinkedMultiValueMap<String, String>().apply {
-                add("grant_type", "client_credentials")
-                add("client_id", properties.clientId)
-                add("client_secret", properties.clientSecret)
-                add("audience", "${properties.baseUrl}/api/v2/")
-            }
-        val response =
-            upstream(SERVICE) {
-                client
-                    .post()
-                    .uri("${properties.baseUrl}/oauth/token")
-                    .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                    .body(form)
-                    .retrieve()
-                    .body<TokenResponse>()
-            }
-        val lifetime = Duration.ofSeconds(response.expiresIn)
-        // Renew a bit before it expires, so a request doesn't leave with a token about to die
-        val margin = minOf(EXPIRY_MARGIN, lifetime.dividedBy(2))
-        return CachedToken(response.accessToken, clock.instant().plus(lifetime).minus(margin))
+        return token.get()
     }
 
     private fun requireConfigured() {
@@ -196,18 +165,6 @@ class Auth0ManagementClient(
             throw UpstreamException(SERVICE, "not configured: set AUTH0_DOMAIN, AUTH0_M2M_CLIENT_ID and AUTH0_M2M_CLIENT_SECRET")
         }
     }
-
-    private inner class CachedToken(
-        val value: String,
-        val renewAt: Instant,
-    ) {
-        fun isFresh() = clock.instant().isBefore(renewAt)
-    }
-
-    private data class TokenResponse(
-        @param:JsonProperty("access_token") val accessToken: String,
-        @param:JsonProperty("expires_in") val expiresIn: Long,
-    )
 
     private data class Auth0UserPage(
         val total: Long,
@@ -226,7 +183,6 @@ class Auth0ManagementClient(
     companion object {
         const val SERVICE = "Auth0 Management API"
         private const val FIELDS = "user_id,name,nickname,email"
-        private val EXPIRY_MARGIN: Duration = Duration.ofSeconds(60)
     }
 }
 
