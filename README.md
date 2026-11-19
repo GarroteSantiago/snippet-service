@@ -135,4 +135,4 @@ git push -u origin dev prod
 gh repo edit <owner>/snippet-service --default-branch dev
 ```
 
-No hace falta configurar secretos: CI usa el `GITHUB_TOKEN` del workflow para publicar en GHCR.
+CI usa el `GITHUB_TOKEN` del workflow para publicar en GHCR. Después de publicar dispara el despliegue de la rama en `snippet-searcher-infra`, con el secreto `DEPLOY_PAT` (token clásico con el scope `repo`). En Swarm, cada variable secreta llega como archivo: `VAR_FILE=/run/secrets/x` (`docker-entrypoint.sh`).

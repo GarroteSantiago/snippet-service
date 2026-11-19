@@ -44,3 +44,12 @@ jobs:
           tags: |
             ${{ steps.meta.outputs.image }}:${{ github.ref_name }}
             ${{ steps.meta.outputs.image }}:${{ github.ref_name }}-${{ steps.meta.outputs.sha }}
+
+      # Despliega la imagen nueva: el workflow Deploy de snippet-searcher-infra corre el stack de
+      # esta rama en su VM. DEPLOY_PAT: token clásico con el scope repo (ver ese repo)
+      - name: Deploy
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_PAT }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY_OWNER}/snippet-searcher-infra/dispatches" \
+            -f event_type=deploy -f "client_payload[environment]=${GITHUB_REF_NAME}"
