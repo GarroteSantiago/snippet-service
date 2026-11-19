@@ -35,7 +35,15 @@ export DOCKER_HOST="unix://${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman-$_podma
 export TESTCONTAINERS_RYUK_DISABLED=true
 
 if ! podman --url "$DOCKER_HOST" info >/dev/null 2>&1; then
-  (podman system service --time=900 "$DOCKER_HOST" >"$_podman_home/service.log" 2>&1 &)
+  # El servicio no puede heredar más descriptores que los suyos: direnv espera a que se cierre
+  # el pipe por el que lee el entorno (fd 3 o más), y con el servicio vivo lo esperaría 15 min
+  (
+    for _fd in /proc/$BASHPID/fd/*; do
+      _fd=${_fd##*/}
+      [ "$_fd" -gt 2 ] && eval "exec $_fd>&-"
+    done
+    exec podman system service --time=900 "$DOCKER_HOST" </dev/null >"$_podman_home/service.log" 2>&1
+  ) &
   for _ in $(seq 1 50); do
     podman --url "$DOCKER_HOST" info >/dev/null 2>&1 && break
     sleep 0.1
