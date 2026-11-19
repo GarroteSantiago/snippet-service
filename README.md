@@ -125,7 +125,7 @@ WebSocket plano según `contracts/websocket.md` (público como `/api/ws/...` det
 
 - `dev` y `prod`. Se trabaja en ramas cortas con pull request a `dev`; `prod` recibe merges desde `dev`.
 - `ci.yml`: `./gradlew check` en cada pull request y push.
-- `publish.yml`: en cada push a `dev` o `prod`, publica la imagen en GHCR como `ghcr.io/<owner>/snippet-service:<rama>` y `:<rama>-<sha>`.
+- `publish-image.yml`: en cada push a `dev` o `prod`, publica la imagen en GHCR como `ghcr.io/<owner>/snippet-service:<rama>` y `:<rama>-<sha>`.
 
 ## Migrar a GitHub
 
