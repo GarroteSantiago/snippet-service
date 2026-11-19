@@ -1,9 +1,11 @@
 package org.snippet.snippet.processing
 
 import org.junit.jupiter.api.Test
+import org.slf4j.MDC
 import org.snippet.snippet.clients.runner.Diagnostic
 import org.snippet.snippet.clients.runner.TestStatus
 import org.snippet.snippet.common.http.BackgroundCalls
+import org.snippet.snippet.common.logging.CorrelationIdFilter
 import org.snippet.snippet.common.streams.StreamProperties
 import org.snippet.snippet.common.streams.StreamWorker
 import org.snippet.snippet.snippet.Compliance
@@ -161,6 +163,17 @@ class ResultHandlerTest {
         send(JobType.VALIDATE, validate, """{"valid":true,"diagnostics":[]}""")
         worker.pollOnce()
         assertEquals(1, fixture.jobsOf(snippet.id, "LINT").size)
+    }
+
+    @Test
+    fun `the correlation id of a result is in the MDC while it's handled, so the jobs it publishes carry it`() {
+        send(JobType.VALIDATE, published(JobType.VALIDATE), """{"valid":true,"diagnostics":[]}""")
+        worker.pollOnce()
+
+        val lint = fixture.streams.entries(Streams.JOBS).single()
+        assertEquals("corr-1", lint.fields[Streams.CORRELATION_ID])
+        // And it doesn't leak to whatever the thread does next
+        assertNull(MDC.get(CorrelationIdFilter.MDC_KEY))
     }
 
     @Test

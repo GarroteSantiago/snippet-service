@@ -1,7 +1,9 @@
 package org.snippet.snippet.common.security
 
 import org.snippet.snippet.common.logging.UserMdcFilter
+import org.snippet.snippet.common.observability.MetricsRequests
 import org.snippet.snippet.run.SnippetRunHandler
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
@@ -12,14 +14,16 @@ import org.springframework.security.oauth2.server.resource.web.authentication.Be
 import org.springframework.security.web.SecurityFilterChain
 
 /**
- * Every endpoint requires a valid Auth0 JWT except the health checks and the handshake of the
+ * Every endpoint requires a valid Auth0 JWT except the health checks, the metrics (internal port) and the handshake of the
  * interactive run, which authenticates in its first message.
  * Signature, `iss`, `aud` and `exp` are validated by Spring from the
  * `spring.security.oauth2.resourceserver.jwt.*` properties.
  */
 @Configuration
 @EnableWebSecurity
-class SecurityConfig {
+class SecurityConfig(
+    @param:Value("\${observability.metrics-port:0}") private val metricsPort: Int,
+) {
     @Bean
     fun securityFilterChain(http: HttpSecurity): SecurityFilterChain {
         http {
@@ -28,6 +32,11 @@ class SecurityConfig {
             authorizeHttpRequests {
                 authorize("/health", permitAll)
                 authorize("/health/**", permitAll)
+                // /prometheus only on the internal metrics port, without a token (MetricsPortConfig)
+                MetricsRequests(metricsPort).let {
+                    authorize(it.onMetricsPort, permitAll)
+                    authorize(it.elsewhere, denyAll)
+                }
                 // Interactive run (US-10): browsers can't send headers on a WebSocket, so the handshake is
                 // public and the first message carries the JWT, which SnippetRunHandler validates with
                 // the same JwtDecoder (contracts/websocket.md)

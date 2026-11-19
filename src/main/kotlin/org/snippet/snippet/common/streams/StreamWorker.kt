@@ -1,5 +1,8 @@
 package org.snippet.snippet.common.streams
 
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.Timer
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import org.slf4j.LoggerFactory
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.context.SmartLifecycle
@@ -56,6 +59,7 @@ class StreamWorker(
     val consumer: String,
     private val handler: StreamHandler,
     private val properties: StreamProperties,
+    private val meters: MeterRegistry = SimpleMeterRegistry(),
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -85,22 +89,36 @@ class StreamWorker(
         entry: StreamEntry,
         reclaimed: Boolean,
     ) {
+        val sample = Timer.start()
+        var outcome = OUTCOME_ERROR
         try {
             val deliveries = if (reclaimed) client.deliveries(stream, group, entry.id) else 1
-            if (deliveries > properties.maxDeliveries) {
-                log.warn("Discarding {} entry {} after {} deliveries", stream, entry.id, deliveries)
-                handler.discard(entry, deliveries)
-            } else {
-                handler.handle(entry)
-            }
+            val handled =
+                if (deliveries > properties.maxDeliveries) {
+                    log.warn("Discarding {} entry {} after {} deliveries", stream, entry.id, deliveries)
+                    handler.discard(entry, deliveries)
+                    OUTCOME_DISCARDED
+                } else {
+                    handler.handle(entry)
+                    OUTCOME_OK
+                }
             client.ack(stream, group, entry.id)
+            outcome = handled
         } catch (e: Exception) {
             log.error("Processing {} entry {} failed; it stays pending to be retried", stream, entry.id, e)
+        } finally {
+            sample.stop(meters.timer(METRIC, "stream", stream, "group", group, "outcome", outcome))
         }
     }
 
     companion object {
         const val START = "0-0"
+
+        // Traffic, errors and latency of the consumer, tagged with stream, group and outcome
+        const val METRIC = "stream.entries"
+        const val OUTCOME_OK = "ok"
+        const val OUTCOME_DISCARDED = "discarded"
+        const val OUTCOME_ERROR = "error"
     }
 }
 

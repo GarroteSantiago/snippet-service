@@ -3,6 +3,7 @@ package org.snippet.snippet.support
 import org.snippet.snippet.common.streams.ClaimedEntries
 import org.snippet.snippet.common.streams.StreamClient
 import org.snippet.snippet.common.streams.StreamEntry
+import org.snippet.snippet.common.streams.StreamStats
 import java.time.Duration
 
 /**
@@ -107,5 +108,14 @@ class FakeStreamClient : StreamClient {
         id: String,
     ) {
         groups[stream to group]?.pending?.remove(id)
+    }
+
+    override fun stats(
+        stream: String,
+        group: String,
+    ): StreamStats {
+        val entries = streams[stream].orEmpty()
+        val state = groups[stream to group] ?: return StreamStats(entries.size.toLong(), null, null)
+        return StreamStats(entries.size.toLong(), (entries.lastIndex - state.lastDelivered).toLong(), state.pending.size.toLong())
     }
 }

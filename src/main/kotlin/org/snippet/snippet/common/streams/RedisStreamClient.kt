@@ -111,6 +111,19 @@ class RedisStreamClient(
         streams.acknowledge(stream, group, id)
     }
 
+    override fun stats(
+        stream: String,
+        group: String,
+    ): StreamStats {
+        // XINFO GROUPS fails on a stream that doesn't exist yet
+        if (redis.hasKey(stream) != true) return StreamStats(0, null, null)
+        val length = streams.size(stream) ?: 0
+        val info = streams.groups(stream).firstOrNull { it.groupName() == group } ?: return StreamStats(length, null, null)
+        // `lag` (Redis 7) has no accessor; Redis answers nil when it can't tell (after some deletions)
+        val lag = info.raw["lag"]?.toString()?.toLongOrNull()
+        return StreamStats(length, lag, info.pendingCount())
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun RedisConnection.lettuceStreams() = nativeConnection as RedisStreamAsyncCommands<ByteArray, ByteArray>
 

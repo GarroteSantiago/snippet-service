@@ -61,10 +61,23 @@ interface StreamClient {
         group: String,
         id: String,
     )
+
+    /** `XLEN` and, from `XINFO GROUPS`, the lag and pending entries of [group] (null while the group doesn't exist). */
+    fun stats(
+        stream: String,
+        group: String,
+    ): StreamStats
 }
 
 /** A page of `XAUTOCLAIM`: [next] is `0-0` when there is nothing left to scan. */
 data class ClaimedEntries(
     val next: String,
     val entries: List<StreamEntry>,
+)
+
+/** Backlog of a stream for one consumer group: entries not delivered yet ([lag]) and delivered but not acked ([pending]). */
+data class StreamStats(
+    val length: Long,
+    val lag: Long?,
+    val pending: Long?,
 )
