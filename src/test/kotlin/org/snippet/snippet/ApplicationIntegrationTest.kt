@@ -1,6 +1,7 @@
 package org.snippet.snippet
 
 import org.junit.jupiter.api.Test
+import org.snippet.snippet.common.http.ServiceTokenProperties
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -11,6 +12,8 @@ import org.springframework.test.web.servlet.get
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.junit.jupiter.Container
 import org.testcontainers.junit.jupiter.Testcontainers
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 
 /** Starts the whole application. */
 @SpringBootTest
@@ -20,6 +23,7 @@ import org.testcontainers.junit.jupiter.Testcontainers
 @Testcontainers(disabledWithoutDocker = true)
 class ApplicationIntegrationTest(
     @param:Autowired private val mockMvc: MockMvc,
+    @param:Autowired private val serviceToken: ServiceTokenProperties,
 ) {
     companion object {
         @Container
@@ -39,5 +43,12 @@ class ApplicationIntegrationTest(
     @Test
     fun `everything else needs a token`() {
         mockMvc.get("/anything").andExpect { status { isUnauthorized() } }
+    }
+
+    @Test
+    fun `the service token comes from the same issuer and audience by default`() {
+        assertEquals("https://snippet-searcher.test/oauth/token", serviceToken.tokenUri)
+        assertEquals("https://snippet-searcher.test/api", serviceToken.audience)
+        assertFalse(serviceToken.configured)
     }
 }

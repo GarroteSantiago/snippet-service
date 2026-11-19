@@ -11,6 +11,7 @@ import org.snippet.snippet.clients.auth0.UserSearchResult
 import org.snippet.snippet.clients.auth0.UserSummary
 import org.snippet.snippet.common.error.UpstreamException
 import org.snippet.snippet.common.http.OutboundHeadersInterceptor
+import org.snippet.snippet.support.MutableClock
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
 import org.springframework.http.HttpStatus
@@ -32,11 +33,8 @@ import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.client.RestClient
 import org.springframework.web.util.UriComponentsBuilder
 import java.net.URLDecoder
-import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.time.ZoneId
-import java.time.ZoneOffset
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -305,18 +303,4 @@ class Auth0ManagementClientTest {
         )
         assertEquals("""NOT user_id:"we\"ird\\id"""", Auth0Query.users(null, """we"ird\id"""))
     }
-}
-
-private class MutableClock(
-    private var now: Instant,
-) : Clock() {
-    fun advance(duration: Duration) {
-        now = now.plus(duration)
-    }
-
-    override fun instant(): Instant = now
-
-    override fun getZone(): ZoneId = ZoneOffset.UTC
-
-    override fun withZone(zone: ZoneId): Clock = this
 }

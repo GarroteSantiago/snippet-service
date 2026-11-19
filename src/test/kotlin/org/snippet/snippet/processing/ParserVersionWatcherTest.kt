@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 class ParserVersionWatcherTest {
     private val fixture = ProcessingFixture()
     private val store = InMemoryParserVersionStore()
-    private val watcher = ParserVersionWatcher(fixture.runner, store, fixture.jobs, BackgroundCalls())
+    private val watcher = ParserVersionWatcher(fixture.runner, store, fixture.jobs, BackgroundCalls(token = null))
 
     private val snippets =
         List(2) {
@@ -54,7 +54,7 @@ class ParserVersionWatcherTest {
             object : RunnerClient by fixture.runner {
                 override fun versions(): Versions = throw UpstreamException("PrintScript Runner", "answered 401")
             }
-        ParserVersionWatcher(down, store, fixture.jobs, BackgroundCalls()).check()
+        ParserVersionWatcher(down, store, fixture.jobs, BackgroundCalls(token = null)).check()
 
         fixture.runner.versions = fixture.runner.versions.copy(parserVersion = null)
         watcher.check()

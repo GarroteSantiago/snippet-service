@@ -36,6 +36,8 @@ El sistema completo se levanta desde `snippet-searcher-infra` con docker compose
 
 | `AUTH0_DOMAIN` | Dominio del tenant (`<tenant>.auth0.com`, sin `https://`; no un custom domain) para la Management API |
 | `AUTH0_M2M_CLIENT_ID`, `AUTH0_M2M_CLIENT_SECRET` | App machine-to-machine de Auth0 autorizada en la Management API con `read:users` |
+| `AUTH0_SERVICE_CLIENT_ID`, `AUTH0_SERVICE_CLIENT_SECRET` | App machine-to-machine autorizada en la API (`AUTH0_AUDIENCE`), para las llamadas sin usuario |
+| `AUTH0_TOKEN_URI` | Opcional: endpoint de tokens; por defecto `${AUTH0_ISSUER_URI}oauth/token` |
 
 | `WS_ALLOWED_ORIGINS` | Orígenes que pueden abrir el WebSocket de ejecución (default `*`) |
 
@@ -43,7 +45,7 @@ El sistema completo se levanta desde `snippet-searcher-infra` con docker compose
 
 - `common/security`: todo exige un JWT válido de Auth0 salvo `/health`.
 - `common/logging`: `X-Correlation-Id` y el usuario (`sub`) en el MDC de cada línea de log.
-- `common/http`: los `RestClient` reenvían el correlation id y el token del usuario a otros servicios.
+- `common/http`: los `RestClient` reenvían el correlation id y el token del usuario a otros servicios (o el del servicio en `BackgroundCalls`).
 - `common/error`: `NotFoundException`, `ForbiddenException`, `ConflictException` y errores de validación como Problem Details.
 - Migraciones con Flyway en `src/main/resources/db/migration` (`V1__descripcion.sql`, ...): `V1` snippets, `V2` reglas, `V3` jobs y `parserVersion`. Hibernate solo valida el esquema.
 
@@ -73,7 +75,7 @@ Según `contracts/redis-streams.md`. `processing/SnippetJobs` publica en `snippe
 - **Ack, reclamo y descarte.** `XACK` recién después de guardar; si falla (Postgres o Asset Service caídos) queda pendiente. Cada 30 s, `XAUTOCLAIM` de lo pendiente hace más de 60 s; con más de 3 entregas se descarta: `LINT` y `VALIDATE` dejan el snippet en `failed` (si siguen siendo el último job).
 - Si no se puede publicar un `LINT` o `VALIDATE`, el snippet queda en `failed` (si no, quedaría `pending` para siempre); un `FORMAT` que no se puede publicar solo se loguea.
 - **US-18.** Al arrancar y cada `parser-version.check-interval` (5 min) se consulta `GET /versions` del Runner. Si `parserVersion` cambió respecto del guardado en `parser_state` (`V3`), se guarda (un `UPDATE` atómico: con varias réplicas publica una sola) y se publica un `VALIDATE` por snippet.
-- **Llamadas sin usuario.** El consumidor y el chequeo de `parserVersion` llaman al Runner y al Asset Service sin un JWT de usuario. Pasan todas por `common/http/BackgroundCalls`, que hoy no agrega token: el Runner (que exige JWT) les va a contestar `401` hasta que ahí se agregue un token M2M de Auth0 (client credentials).
+- **Llamadas sin usuario.** El consumidor y el chequeo de `parserVersion` llaman al Runner y al Asset Service sin un JWT de usuario. Pasan todas por `common/http/BackgroundCalls`: adentro de `call {}` los `RestClient` mandan un token *client credentials* del servicio (`AUTH0_SERVICE_CLIENT_ID`/`SECRET`, `POST ${AUTH0_TOKEN_URI}` con audience `AUTH0_AUDIENCE`, ver `contracts/README.md`) en vez del del usuario. El token se guarda en memoria hasta un minuto antes de que venza (o la mitad de su vida si es más corta); un `401` lo descarta. Si no se puede pedir, la llamada falla como si el servicio estuviera caído. Sin esas credenciales el servicio arranca igual (lo avisa en el log) y esas llamadas salen sin token: el Runner les contesta `401`.
 - `streams.enabled: false` apaga el consumidor y el chequeo (se sigue publicando); así corren los tests sin Redis. `ProcessingIntegrationTest` usa Postgres y Redis con Testcontainers (corre en CI); la lógica también está cubierta sin Docker con un Redis en memoria (`support/FakeStreamClient`). El dev shell trae `redis` para probar a mano.
 - **Tests (US-16).** Al cambiar el contenido o la versión se publica un `TEST` por cada test del snippet. El `jobId` se guarda en `test_case.last_job_id` (`V5`) antes de publicar; un resultado `OK` actualiza `last_result` solo si su `jobId` sigue siendo el último de ese test (`TestCaseRepository.updateResultOfJob`). Un `TEST` `FAILED` solo se loguea.
 

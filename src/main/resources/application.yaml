@@ -85,6 +85,14 @@ auth0:
     domain: ${AUTH0_DOMAIN:}
     client-id: ${AUTH0_M2M_CLIENT_ID:}
     client-secret: ${AUTH0_M2M_CLIENT_SECRET:}
+  # Client Credentials of the service itself, for the calls without a user (the consumer of
+  # snippet:results, the parserVersion check): contracts/README.md, "Llamadas sin usuario".
+  # Without the client id and secret the service starts anyway, but the Runner rejects those calls (401).
+  service:
+    token-uri: ${AUTH0_TOKEN_URI:${spring.security.oauth2.resourceserver.jwt.issuer-uri}oauth/token}
+    client-id: ${AUTH0_SERVICE_CLIENT_ID:}
+    client-secret: ${AUTH0_SERVICE_CLIENT_SECRET:}
+    audience: ${spring.security.oauth2.resourceserver.jwt.audiences}
 
 # Ejecución interactiva por WebSocket (/ws/snippets/{id}/run, contracts/websocket.md)
 snippet-run:
