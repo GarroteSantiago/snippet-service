@@ -3,6 +3,8 @@ name: Publish image
 on:
   push:
     branches: [dev, prod]
+  # Para volver a publicar a mano (pestaña Actions) la imagen de una rama
+  workflow_dispatch:
 
 jobs:
   publish:
